@@ -5,8 +5,8 @@ import os
 import urllib.request
 
 BASE_URL = "https://integrate.api.nvidia.com/v1"
-DEFAULT_MODEL = "nvidia/nemotron-nano-3-30b-a3b"
-FALLBACK_MODELS = ["nvidia/nemotron-3-super-120b-a12b", "nvidia/llama-3.1-nemotron-70b-instruct"]
+DEFAULT_MODEL = "nvidia/nemotron-3.5-bolt-e4b"
+FALLBACK_MODELS = ["nvidia/nemotron-3-ultra-550b-a55b"]
 
 
 class NemotronGenerator:
