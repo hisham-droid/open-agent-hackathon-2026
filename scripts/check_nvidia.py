@@ -22,15 +22,24 @@ except Exception as e:
 nemo = [m for m in models if "nemotron" in m.lower()]
 print(f"key accepted; {len(models)} models, {len(nemo)} Nemotron:")
 print("\n".join("  " + m for m in nemo[:25]))
-from agent.nvidia import DEFAULT_MODEL, FALLBACK_MODELS  # noqa: E402
+import urllib.error  # noqa: E402
 
+SKIP = ("embed", "guard", "safety", "parse", "reward", "rerank", "clip", "vl", "reasoning")
 wanted = os.environ.get("NVIDIA_MODEL")
-for model in ([wanted] if wanted else []) + [DEFAULT_MODEL] + FALLBACK_MODELS:
+candidates = ([wanted] if wanted else []) + [m for m in nemo if not any(s in m for s in SKIP)]
+candidates += [m for m in models if m not in candidates and any(k in m for k in ("llama-3", "mistral", "qwen")) and not any(s in m for s in SKIP)][:12]
+working = []
+for model in candidates:
     try:
-        reply = NemotronGenerator(key, model)("Reply with a strict JSON array of two short strings about CI. Nothing else.")
-        print(f"WORKS: {model}\nreply: {reply}")
-        break
+        reply = NemotronGenerator(key, model, timeout=40)("Reply with a strict JSON array of two short strings about CI. Nothing else.")
+        print(f"WORKS: {model} -> {reply[:80]!r}")
+        working.append(model)
+        if len(working) >= 2:
+            break
+    except urllib.error.HTTPError as e:
+        print(f"failed: {model}: HTTP {e.code} {e.read()[:160]!r}")
     except Exception as e:
         print(f"failed: {model}: {e}")
-else:
-    sys.exit("no model worked")
+if not working:
+    sys.exit("no chat model worked")
+print("\nAdd this line to .env:  NVIDIA_MODEL=" + working[0])
