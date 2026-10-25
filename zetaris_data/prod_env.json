@@ -1,0 +1,29 @@
+{
+ "rows": [
+  {
+   "deploy_id": "d-102",
+   "key": "DB_POOL",
+   "value": "20"
+  },
+  {
+   "deploy_id": "d-102",
+   "key": "DATABASE_URL",
+   "value": "redacted"
+  },
+  {
+   "deploy_id": "d-102",
+   "key": "LOG_LEVEL",
+   "value": "info"
+  },
+  {
+   "deploy_id": "d-102",
+   "key": "PORT",
+   "value": "8080"
+  },
+  {
+   "deploy_id": "d-102",
+   "key": "MAIL_HOST",
+   "value": "smtp.internal"
+  }
+ ]
+}

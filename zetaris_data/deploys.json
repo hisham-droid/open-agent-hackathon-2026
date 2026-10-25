@@ -1,0 +1,32 @@
+{
+ "rows": [
+  {
+   "id": "d-100",
+   "sha": "a1b2c3d",
+   "ts": "2026-10-21T09:40:00Z",
+   "env": "production",
+   "status": "success"
+  },
+  {
+   "id": "d-101",
+   "sha": "d4e5f6a",
+   "ts": "2026-10-22T12:00:00Z",
+   "env": "production",
+   "status": "success"
+  },
+  {
+   "id": "d-102",
+   "sha": "77bb88c",
+   "ts": "2026-10-23T14:05:00Z",
+   "env": "production",
+   "status": "failed"
+  },
+  {
+   "id": "d-103",
+   "sha": "d4e5f6a",
+   "ts": "2026-10-23T14:20:00Z",
+   "env": "production",
+   "status": "rolled_back"
+  }
+ ]
+}
