@@ -26,3 +26,6 @@ data/private/
 # generated at runtime
 outputs/
 .agent_memory/
+
+# sponsor reference docs (not ours to redistribute)
+_ref/
