@@ -1,0 +1,6 @@
+.env
+.git
+_ref
+outputs*/
+.agent_memory*/
+__pycache__

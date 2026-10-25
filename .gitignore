@@ -32,3 +32,6 @@ _ref/
 
 outputs_live/
 .agent_memory_live/
+.cmd_log.txt
+outputs_live2/
+.step.sh

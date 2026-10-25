@@ -15,6 +15,33 @@ python3 -m unittest -v
 
 Outputs land in `outputs/report.md` and `outputs/trace.jsonl`, with memory audit logs in `outputs/logs/`. Saved examples are in `sample_outputs/` (three sessions against one memory; regenerate with `python3 scripts/demo_memory.py`).
 
+## Architecture
+
+```mermaid
+flowchart LR
+  Q[Question] --> P[Planner]
+  P --> S[Specialists: deploy, logs, commits, CI]
+  S -->|facts + evidence ids| E[Evaluator]
+  E -->|reject: what is unproven| P
+  E -->|accept at 0.85+ with all checks| R[Report + trace]
+  Z[(Zetaris SQL over REST)] --> S
+  S -->|events| M[H-MEM: mine, store, retrieve, ledger]
+  N[NVIDIA Nemotron] -.->|mining model| M
+  M -->|recalled lessons shape the plan| P
+  E -->|outcome feedback| M
+```
+
+## Run it live (Zetaris + Nemotron)
+
+Set `SAMPLE_MODE=false` and fill `.env` (see `.env.example`), with Zetaris running locally, then `python3 -m agent.main`. Proof runs are saved in `sample_outputs/live-run-1` (cold start) and `sample_outputs/live-run-2` (the lesson from run 1 is recalled, 1 round instead of 4).
+
+## Docker
+
+```bash
+docker build -t build-detective .
+docker run --rm build-detective            # sample mode, no credentials
+```
+
 ## How it works
 
 - **Planner** decides which specialist to run next based on what the evaluator says is still unproven.
@@ -38,7 +65,7 @@ Honest status as of the last commit:
 | Agent loop, trace, tests, SAMPLE_MODE | Working |
 | Zetaris as the data layer | Integrated and verified live: the agent reads commits, deploys, CI runs, logs and prod env through SQL over the Zetaris REST API (`SAMPLE_MODE=false`). Offline tests use a fake runner; the live test is opt-in (`RUN_LIVE_ZETARIS=1`). |
 | Meterless engine (H-MEM) | Implemented in Python from the H-MEM Agent Engine reference architecture, in `agent/hmem/`: tiered store, runtime-event mining (with a no-model fallback), hybrid retrieval with reinjection payload, JSONL trust ledger, feedback adaptation, warm start with forgetting curve. Not implemented: dreaming, sleep/consolidation, conflict resolution. No Meterless runtime token is used; memory is local. |
-| NVIDIA Nemotron | Not yet integrated |
+| NVIDIA Nemotron | Integrated and verified live (`nvidia/nemotron-3.5-bolt-e4b` by default, override with `NVIDIA_MODEL`). It acts as the H-MEM mining model that turns each specialist result into durable memories. If the call fails or no key is set, mining falls back to plain summaries. It never decides the diagnosis; the evaluator does. |
 
 Secrets go in `.env` (see `.env.example`). `.env` is gitignored.
 
