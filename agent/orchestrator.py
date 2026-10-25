@@ -73,6 +73,8 @@ def investigate(ds, trace, memory, question):
     planner, evaluator = Planner(), Evaluator()
     state = {"cand_idx": 0, "rejected": [], "commits": None, "env": None, "ci": None, "log": None}
     trace.log("planner", "start", question=question, data_source=ds.source, memory_backend=memory.backend)
+    if getattr(ds, "queries", None):
+        trace.log("data", "load", source=ds.source, sql=ds.queries, row_counts=getattr(ds, "row_counts", {}))
 
     def run(action):
         if action == "deploy.locate":
