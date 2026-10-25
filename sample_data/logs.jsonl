@@ -1,0 +1,10 @@
+{"ts": "2026-10-22T12:00:05Z", "deploy_id": "d-101", "level": "INFO", "service": "boot", "msg": "starting shipit d4e5f6a"}
+{"ts": "2026-10-22T12:00:07Z", "deploy_id": "d-101", "level": "INFO", "service": "app", "msg": "loaded configuration, db pool size 20"}
+{"ts": "2026-10-22T12:00:12Z", "deploy_id": "d-101", "level": "INFO", "service": "healthcheck", "msg": "health check passed"}
+{"ts": "2026-10-23T14:05:03Z", "deploy_id": "d-102", "level": "INFO", "service": "boot", "msg": "starting shipit 77bb88c"}
+{"ts": "2026-10-23T14:05:04Z", "deploy_id": "d-102", "level": "WARN", "service": "mailer", "msg": "email send attempt 2 of 3 failed, retrying"}
+{"ts": "2026-10-23T14:05:05Z", "deploy_id": "d-102", "level": "INFO", "service": "app", "msg": "loading configuration"}
+{"ts": "2026-10-23T14:05:06Z", "deploy_id": "d-102", "level": "ERROR", "service": "config", "msg": "KeyError: 'DATABASE_POOL_SIZE' required environment variable not set"}
+{"ts": "2026-10-23T14:05:06Z", "deploy_id": "d-102", "level": "FATAL", "service": "app", "msg": "startup aborted: configuration invalid"}
+{"ts": "2026-10-23T14:06:10Z", "deploy_id": "d-102", "level": "ERROR", "service": "healthcheck", "msg": "health check failed after 3 probes on port 8080"}
+{"ts": "2026-10-23T14:20:00Z", "deploy_id": "d-102", "level": "INFO", "service": "deploy", "msg": "rollback to d-101 triggered"}

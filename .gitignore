@@ -22,3 +22,7 @@ build/
 # local data and logs
 *.log
 data/private/
+
+# generated at runtime
+outputs/
+.agent_memory/
