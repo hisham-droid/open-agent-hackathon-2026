@@ -29,3 +29,6 @@ outputs/
 
 # sponsor reference docs (not ours to redistribute)
 _ref/
+
+outputs_live/
+.agent_memory_live/
