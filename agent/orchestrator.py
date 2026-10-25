@@ -1,5 +1,5 @@
 """Planner -> specialists -> evaluator loop. The evaluator can reject, which forces the planner to retry or branch."""
-from .specialists import DeploySpecialist, LogSpecialist, CommitSpecialist, CISpecialist
+from .specialists import DeploySpecialist, LogSpecialist, CommitSpecialist, CISpecialist, TOKEN_RE
 
 WEIGHTS = {"log_signature": 0.30, "commit_introduces": 0.30, "prod_env_missing": 0.25, "ci_explains_green": 0.15}
 ACCEPT_AT = 0.85
@@ -68,13 +68,23 @@ class Planner:
         return []
 
 
-def investigate(ds, trace, memory, question):
+FAILURE_CLASS = "required-config-missing-in-prod"
+FAST_PATH_MIN_CONFIDENCE = 0.5
+
+
+def investigate(ds, trace, memory, question, run_id="run-1"):
     deploy_sp, log_sp, commit_sp, ci_sp = DeploySpecialist(), LogSpecialist(), CommitSpecialist(), CISpecialist()
     planner, evaluator = Planner(), Evaluator()
-    state = {"cand_idx": 0, "rejected": [], "commits": None, "env": None, "ci": None, "log": None}
-    trace.log("planner", "start", question=question, data_source=ds.source, memory_backend=memory.backend)
+    state = {"cand_idx": 0, "rejected": [], "commits": None, "env": None, "ci": None, "log": None,
+             "fast_path": False, "memory_payload": None, "memory_top": None}
+    trace.log("planner", "start", question=question, data_source=ds.source, memory_backend=memory.backend, run_id=run_id)
     if getattr(ds, "queries", None):
         trace.log("data", "load", source=ds.source, sql=ds.queries, row_counts=getattr(ds, "row_counts", {}))
+    trace.log("hmem", "hydrate", **memory.start_run(run_id))
+
+    def mine(agent, task, summary, kind="tool_result"):
+        made, mode = memory.mine({"kind": kind, "summary": summary}, agent, run_id, task)
+        trace.log("hmem", "mine", source_agent=agent, task=task, memories=[m["id"] for m in made], mode=mode)
 
     def run(action):
         if action == "deploy.locate":
@@ -85,36 +95,59 @@ def investigate(ds, trace, memory, question):
         elif action == "log.analyze":
             r = log_sp.analyze(ds, state["deploy"]["failed"]["id"])
             state["log"] = r
-            hits = memory.recall(r["tokens"])
-            state["memory_hits"] = hits
             trace.log("logs", action, primary=r["primary"] and r["primary"]["msg"], tokens=r["tokens"], evidence=r["evidence"])
-            trace.log("memory", "recall", tokens=r["tokens"], prior_cases=len(hits))
+            if r["primary"]:
+                # Query by failure shape, not by this incident's variable name, so lessons generalise across incidents.
+                shape = TOKEN_RE.sub("", r["primary"]["msg"])
+                query = f"{shape} deploy failed startup"
+                payload = memory.retrieve(query, "planner", run_id)
+                state["memory_payload"] = payload
+                trace.log("hmem", "retrieve", strategy=payload["strategy"], reason=payload["retrievalReason"],
+                          hits=[{"id": m["id"], "score": m["score"], "confidence": m["confidence"]} for m in payload["memories"]])
+                top = next((m for m in payload["memories"] if m["type"] == "procedural" and m["layer"] == "long_term"
+                            and m["confidence"] >= FAST_PATH_MIN_CONFIDENCE), None)
+                if top:
+                    state["memory_top"], state["fast_path"] = top, True
+                # Mine after retrieving so a run never recalls its own fresh observation as prior knowledge.
+                mine("logs", action, f"First error in deploy {state['deploy']['failed']['id']}: {r['primary']['msg']}")
         elif action == "commits.analyze":
             r = commit_sp.analyze(ds, state["deploy"]["window"], state["log"]["tokens"])
             state["commits"] = r
             trace.log("commits", action, ranked=[{"sha": c["sha"], "score": c["score"], "introduced": c["introduced"]} for c in r])
+            if r and r[0]["introduced"]:
+                mine("commits", action, f"Commit {r[0]['sha']} ('{r[0]['message']}') introduced {', '.join(r[0]['introduced'])}")
         elif action == "env.check":
             cand = evaluator.candidate(state)
             r = deploy_sp.check_env(ds, cand["introduced"])
             state["env"] = r
             trace.log("deploy", action, candidate=cand["sha"], missing=r["missing"], present=r["present"], evidence=r["evidence"])
+            mine("deploy", action, f"Production env missing {r['missing'] or 'nothing'}; defines {r['present'] or 'none'}")
         elif action == "ci.analyze":
             cand = evaluator.candidate(state)
             r = ci_sp.analyze(ds, cand["sha"], cand["introduced"])
             state["ci"] = r
             trace.log("ci", action, candidate=cand["sha"], green=r["green"], ci_defines_token=r["defines_token"], evidence=r["evidence"])
+            mine("ci", action, f"CI run {r['run']} green={r['green']}, CI defines the variable={r['defines_token']}")
 
     actions = ["deploy.locate", "log.analyze"]
     rounds, review = 0, None
     while rounds < 8:
         rounds += 1
-        if not state.get("deploy") and actions[0] != "deploy.locate":
-            break
         for a in actions:
             run(a)
             if a == "deploy.locate" and state["deploy"] is None:
                 trace.log("planner", "abort", reason="no failed production deploy found")
                 return {"status": "no_failure_found", "confidence": 0.0, "rounds": rounds}
+        if rounds == 1 and state["fast_path"]:
+            # Memory shapes the plan (run the likely checks together) but never lowers the evidence bar:
+            # the evaluator below still requires every check to pass.
+            trace.log("planner", "plan_from_memory", memory_id=state["memory_top"]["id"], score=state["memory_top"]["score"],
+                      steps=["commits.analyze", "env.check", "ci.analyze"],
+                      note="evaluator still verifies every check from evidence")
+            run("commits.analyze")
+            if evaluator.candidate(state):
+                run("env.check")
+                run("ci.analyze")
         review = evaluator.review(state)
         trace.log("evaluator", "review", round=rounds, verdict=review["verdict"], confidence=review["confidence"],
                   checks=review["checks"], critique=review["critique"])
@@ -143,15 +176,40 @@ def investigate(ds, trace, memory, question):
               "checks": review["checks"] if review else {}, "culprit": cand, "ruled_out": ruled_out,
               "failed_deploy": state["deploy"]["failed"], "last_good": state["deploy"]["last_good"],
               "primary_log": state["log"]["primary"], "primary_log_id": state["log"].get("primary_id"),
-              "env": state["env"], "ci": state["ci"], "memory_hits": state.get("memory_hits", [])}
+              "env": state["env"], "ci": state["ci"]}
+    mem = {"retrieved": [m for m in (state["memory_payload"] or {}).get("memories", [])],
+           "strategy": (state["memory_payload"] or {}).get("strategy"), "fast_path": state["fast_path"],
+           "feedback": None, "lesson_id": None}
+
     if status == "confirmed" and cand:
         result["cause"] = (f"Commit {cand['sha']} ('{cand['message']}') made {', '.join(cand['introduced'])} a required setting, "
                            f"but production does not define it, so the new version aborted at startup and failed its health check.")
-        memory.remember({"tokens": state["log"]["tokens"], "sha": cand["sha"], "message": cand["message"],
-                         "confidence": result["confidence"], "deploy": state["deploy"]["failed"]["id"]})
     else:
         lead = f" Leading suspect: commit {cand['sha']} ('{cand['message']}')." if cand else ""
         result["cause"] = "Inconclusive: the evidence does not support a single root cause." + lead
+
+    # Feedback adaptation: the outcome tells memory whether the recalled knowledge helped.
+    if state["fast_path"]:
+        verdict = "helpful" if status == "confirmed" else "wrong"
+        updated = memory.feedback(state["memory_top"]["id"], verdict, "evaluator",
+                                  reason=f"memory-guided plan ended {status} at confidence {result['confidence']}")
+        mem["feedback"] = {"memory_id": state["memory_top"]["id"], "verdict": verdict,
+                           "confidence_after": updated["confidence"] if updated else None}
+        trace.log("hmem", "feedback", **mem["feedback"])
+
+    if status == "confirmed" and cand and state["env"] and state["env"]["missing"]:
+        lesson = memory.remember_lesson(
+            FAILURE_CLASS,
+            "Deploy fails at startup with a KeyError or 'required environment variable not set'. Check whether a recent "
+            "commit made that variable required, then whether production defines it. CI can stay green when CI defines "
+            "the variable but production does not.",
+            derived_from=[f"deploy:{state['deploy']['failed']['id']}", f"commit:{cand['sha']}"],
+            agent_id="planner", run_id=run_id, task_id="outcome", tags=["startup-failure", "ci-green-prod-red"])
+        mem["lesson_id"] = lesson["id"]
+        trace.log("hmem", "remember_lesson", memory_id=lesson["id"], layer=lesson["layer"],
+                  confidence=lesson["confidence"], access_count=lesson["accessCount"])
+    memory.close()
+    result["memory"] = mem
     trace.log("planner", "finish", status=status, confidence=result["confidence"], rounds=rounds,
-              culprit=cand["sha"] if cand else None)
+              culprit=cand["sha"] if cand else None, memory_fast_path=state["fast_path"])
     return result

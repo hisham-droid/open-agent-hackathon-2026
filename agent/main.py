@@ -5,7 +5,7 @@ import sys
 
 from .data import SampleDataset
 from .env import load_env
-from .memory import LocalJSONMemory
+from .hmem import HMem
 from .orchestrator import investigate
 from .report import render
 from .trace import Trace
@@ -13,11 +13,12 @@ from .trace import Trace
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
-def run(question, data, out, memory_path, dataset=None):
+def run(question, data, out, memory_dir, dataset=None, run_id="run-1", generator=None):
     ds = dataset or SampleDataset(data)
     out = pathlib.Path(out)
     trace = Trace(out / "trace.jsonl")
-    result = investigate(ds, trace, LocalJSONMemory(memory_path), question)
+    memory = HMem(memory_dir, log_dir=out / "logs", generator=generator)
+    result = investigate(ds, trace, memory, question, run_id=run_id)
     report = render(question, result)
     (out / "report.md").write_text(report)
     return result, report
@@ -28,7 +29,7 @@ def main(argv=None):
     p.add_argument("question", nargs="?", default="Why did the latest production deploy fail?")
     p.add_argument("--data", default=str(ROOT / "sample_data"))
     p.add_argument("--out", default=str(ROOT / "outputs"))
-    p.add_argument("--memory", default=str(ROOT / ".agent_memory" / "cases.json"))
+    p.add_argument("--memory", default=str(ROOT / ".agent_memory"))
     a = p.parse_args(argv)
     load_env()
     dataset = None

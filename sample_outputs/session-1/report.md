@@ -24,4 +24,8 @@ Commit 9f8e7d6 ('Rename DB_POOL to DATABASE_POOL_SIZE for clarity') made DATABAS
 - 55aa66b: no overlap with the error signature in the logs
 - 77bb88c: touches 'mailer', which only appears in non-fatal WARN lines
 
+## Memory (H-MEM)
+- Nothing relevant in memory yet (cold start).
+- Saved lesson `lesson:required-config-missing-in-prod` to long-term memory for future runs.
+
 Full step-by-step trace: `trace.jsonl`.

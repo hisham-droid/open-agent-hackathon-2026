@@ -37,7 +37,7 @@ class ZetarisSourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ds = ZetarisDataset(runner=fake_runner())
             r, _ = run("Why did the latest production deploy fail?", None, pathlib.Path(tmp) / "out",
-                       pathlib.Path(tmp) / "mem.json", dataset=ds)
+                       pathlib.Path(tmp) / "mem", dataset=ds)
             trace = [json.loads(l) for l in (pathlib.Path(tmp) / "out" / "trace.jsonl").read_text().splitlines()]
         self.assertEqual(r["status"], "confirmed")
         self.assertEqual(r["culprit"]["sha"], "9f8e7d6")

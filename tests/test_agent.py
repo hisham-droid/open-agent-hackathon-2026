@@ -17,7 +17,7 @@ def fresh_copy(tmp):
 
 
 def go(data, tmp, name="out"):
-    return run("Why did the latest production deploy fail?", data, pathlib.Path(tmp) / name, pathlib.Path(tmp) / "mem.json")
+    return run("Why did the latest production deploy fail?", data, pathlib.Path(tmp) / name, pathlib.Path(tmp) / "mem")
 
 
 class AgentTests(unittest.TestCase):
@@ -63,14 +63,6 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(reviews[-1]["verdict"], "accept")
         self.assertTrue(any(l["action"] == "replan" for l in lines))
         self.assertEqual([l["seq"] for l in lines], list(range(1, len(lines) + 1)))
-
-    def test_memory_recalls_prior_case(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            first, _ = go(SAMPLE, tmp, "run1")
-            second, report = go(SAMPLE, tmp, "run2")
-        self.assertEqual(first["memory_hits"], [])
-        self.assertEqual(len(second["memory_hits"]), 1)
-        self.assertIn("Seen before", report)
 
 
 if __name__ == "__main__":

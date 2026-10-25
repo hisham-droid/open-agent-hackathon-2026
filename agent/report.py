@@ -19,7 +19,19 @@ def render(question, r):
                  f"- CI run `{r['ci']['run']}` green: {r['ci']['green']}; CI defines the variable: {r['ci']['defines_token']}")
     L += ["", "## Checks"] + [f"- {k}: {v}" for k, v in r["checks"].items()]
     L += ["", "## Ruled out"] + [f"- {x['sha']}: {x['reason']}" for x in r["ruled_out"]]
-    if r["memory_hits"]:
-        L += ["", "## Seen before", *[f"- {h['sha']} ('{h['message']}') on {h['deploy']}" for h in r["memory_hits"]]]
+    mem = r.get("memory") or {}
+    L += ["", "## Memory (H-MEM)"]
+    if mem.get("retrieved"):
+        top = mem["retrieved"][0]
+        L.append(f"- Retrieved {len(mem['retrieved'])} memory (strategy: {mem['strategy']}); top match `{top['id']}` "
+                 f"scored {top['score']} at confidence {top['confidence']}: {top['content']}")
+        if mem["fast_path"]:
+            L.append("- The planner used it to run the likely checks together. The evaluator still verified every check from evidence.")
+        if mem.get("feedback"):
+            L.append(f"- Outcome fed back as `{mem['feedback']['verdict']}`; memory confidence is now {mem['feedback']['confidence_after']}.")
+    else:
+        L.append("- Nothing relevant in memory yet (cold start).")
+    if mem.get("lesson_id"):
+        L.append(f"- Saved lesson `{mem['lesson_id']}` to long-term memory for future runs.")
     L += ["", "Full step-by-step trace: `trace.jsonl`."]
     return "\n".join(L)
