@@ -5,7 +5,8 @@ import os
 import urllib.request
 
 BASE_URL = "https://integrate.api.nvidia.com/v1"
-DEFAULT_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1.5"
+DEFAULT_MODEL = "nvidia/nemotron-nano-3-30b-a3b"
+FALLBACK_MODELS = ["nvidia/nemotron-3-super-120b-a12b", "nvidia/llama-3.1-nemotron-70b-instruct"]
 
 
 class NemotronGenerator:
@@ -30,4 +31,7 @@ class NemotronGenerator:
         req = urllib.request.Request(f"{self.base_url}/chat/completions", data=body, method="POST",
                                      headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"})
         with self.opener(req, timeout=self.timeout) as resp:
-            return json.load(resp)["choices"][0]["message"]["content"]
+            text = json.load(resp)["choices"][0]["message"].get("content")
+        if not text:
+            raise ValueError("empty completion")
+        return text

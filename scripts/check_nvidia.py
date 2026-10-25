@@ -22,6 +22,15 @@ except Exception as e:
 nemo = [m for m in models if "nemotron" in m.lower()]
 print(f"key accepted; {len(models)} models, {len(nemo)} Nemotron:")
 print("\n".join("  " + m for m in nemo[:25]))
-gen = NemotronGenerator.from_env()
-print(f"\nusing model: {gen.model}  (override with NVIDIA_MODEL in .env)")
-print("reply:", gen('Reply with a strict JSON array of two short strings about CI. Nothing else.'))
+from agent.nvidia import DEFAULT_MODEL, FALLBACK_MODELS  # noqa: E402
+
+wanted = os.environ.get("NVIDIA_MODEL")
+for model in ([wanted] if wanted else []) + [DEFAULT_MODEL] + FALLBACK_MODELS:
+    try:
+        reply = NemotronGenerator(key, model)("Reply with a strict JSON array of two short strings about CI. Nothing else.")
+        print(f"WORKS: {model}\nreply: {reply}")
+        break
+    except Exception as e:
+        print(f"failed: {model}: {e}")
+else:
+    sys.exit("no model worked")
