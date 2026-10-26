@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Build-Failure Detective</title>
+<script type="importmap">{"imports":{"three":"/vendor/three.module.min.js","three/addons/":"/vendor/addons/"}}</script>
 <style>
 :root{--bg:#f5f3ee;--bg2:#ebe8df;--card:#fffdf9;--ink:#20232a;--mute:#69707a;--line:#e3ded2;--acc:#2f7d6d;--accbg:#e1f0eb;--mem:#6e5fb0;--membg:#ebe7f6;--warn:#b5651d;--warnbg:#f8ead8;--bad:#a8403a;--badbg:#f7e1de;--shadow:0 1px 2px rgba(30,30,20,.05),0 8px 24px rgba(30,30,20,.06);--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
 @media (prefers-color-scheme:dark){:root{--bg:#16181b;--bg2:#1c1f23;--card:#21242a;--ink:#edece6;--mute:#9aa1aa;--line:#33383f;--acc:#63c2ad;--accbg:#1f3a35;--mem:#a899e6;--membg:#2a2640;--warn:#e3a762;--warnbg:#3a2e1f;--bad:#e58a82;--badbg:#3d2523;--shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25)}}
@@ -57,11 +58,24 @@ ol.tl li.ev:before{background:var(--acc)}ol.tl li.rej:before{background:var(--wa
 .stack>*+*{margin-top:18px}.empty{color:var(--mute);text-align:center;padding:34px 10px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:r .8s linear infinite;vertical-align:-2px;margin-right:8px}@keyframes r{to{transform:rotate(360deg)}}
 .check path{stroke-dasharray:40;stroke-dashoffset:40}
+.hero{position:relative;border-radius:24px;overflow:hidden;border:1px solid var(--line);background:radial-gradient(800px 380px at 70% 40%,var(--accbg),transparent 70%),var(--card);box-shadow:var(--shadow);margin-bottom:24px}
+#machine{position:relative;height:clamp(440px,60vh,600px)}#machine canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.htext{position:absolute;left:34px;top:30px;z-index:2;max-width:430px;pointer-events:none}.htext .badges{margin-bottom:0}.htext .badge{pointer-events:auto}
+@media(max-width:900px){.htext{left:18px;top:16px;max-width:none;right:18px}#machine{height:520px}.htext .sub{font-size:15px}}
+.mlabel{position:absolute;left:0;top:0;z-index:3;background:var(--card);color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:2px 10px;font:600 12px/1.5 system-ui;cursor:pointer;transition:color .2s,border-color .2s,box-shadow .2s;white-space:nowrap;will-change:transform}
+.mlabel.on{color:var(--ink);border-color:var(--acc);box-shadow:0 4px 14px color-mix(in srgb,var(--acc) 30%,transparent)}
+.mviews{position:absolute;right:16px;top:16px;z-index:4;display:flex;gap:6px}.mviews button{background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:6px 12px;font:500 13px system-ui;cursor:pointer}.mviews button:hover{border-color:var(--acc)}
+#mtip{position:absolute;left:34px;bottom:22px;z-index:4;max-width:360px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 14px;box-shadow:var(--shadow);font-size:14px}#mtip b{display:block;margin-bottom:2px}#mtip span{color:var(--mute)}
+.hint{position:absolute;right:18px;bottom:16px;z-index:4;font-size:12.5px;color:var(--mute)}#machine.nogl .mlabel,#machine.nogl .mviews{display:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body><div class="wrap">
-<h1><span>Build-Failure</span> Detective</h1>
-<p class="sub">An agent that finds why a deploy failed, shows its evidence, and says so when it can't be sure.</p>
-<div class="badges"><span class="badge"><i></i>Zetaris data layer</span><span class="badge"><i></i>H-MEM memory</span><span class="badge" id="nsb"><i id="nsd"></i><span id="nst">Nemotron via Nightshift</span></span></div>
+<section class="hero" aria-label="3D model of the agent"><div id="machine">
+ <div class="htext"><h1><span>Build-Failure</span> Detective</h1>
+ <p class="sub">An agent that finds why a deploy failed, shows its evidence, and says so when it can't be sure.</p>
+ <div class="badges"><span class="badge"><i></i>Zetaris data layer</span><span class="badge"><i></i>H-MEM memory</span><span class="badge" id="nsb"><i id="nsd"></i><span id="nst">Nemotron via Nightshift</span></span></div></div>
+ <div class="mviews"><button data-view="overview">Overview</button><button data-view="front">Front</button><button data-view="top">Top</button><button data-view="memory">Memory</button></div>
+ <div id="mtip" hidden><b></b><span></span></div><div class="hint">Drag to orbit. Click a station.</div>
+</div></section>
 <div class="grid">
  <div class="side"><div class="card"><h2>Pick an incident</h2><div id="list"></div>
    <label class="t"><input type="checkbox" id="usemodel" checked> Let Nemotron write the explanation</label>
@@ -119,7 +133,7 @@ async function load(){const r=await (await fetch("/api/scenarios")).json();const
   b.onclick=()=>{sel=s.id;l.querySelectorAll(".sc").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");$("#go").disabled=false};l.append(b);rise(b,i);if(i===0)b.click()})}
 $("#reset").onclick=async()=>{await fetch("/api/reset",{method:"POST",body:"{}"});history=[];$("#out").replaceChildren();$("#now").textContent="Memory cleared. The next run is a cold start."};
 const clearNodes=()=>Object.values(nodeEl).forEach(n=>n.className="node"+(n.dataset.k==="hmem"?" mem":""));
-$("#go").onclick=async()=>{const out=$("#out"),btn=$("#go");btn.disabled=true;btn.textContent="Investigating...";out.replaceChildren();clearNodes();
+$("#go").onclick=async()=>{const out=$("#out"),btn=$("#go");btn.disabled=true;btn.textContent="Investigating...";out.replaceChildren();clearNodes();window.__machine&&window.__machine.reset();
  pipe.classList.add("working");$("#now").replaceChildren(el("span","spin"),document.createTextNode("Reading evidence and checking hypotheses. With a model on the line this takes a minute or two."));
  try{const res=await fetch("/api/investigate",{method:"POST",body:JSON.stringify({scenario:sel,use_model:$("#usemodel").checked})});const d=await res.json();
   if(d.error)throw new Error(d.error);pipe.classList.remove("working");await play(d)}catch(e){pipe.classList.remove("working");out.replaceChildren(el("div","err","Something went wrong: "+e.message));$("#now").textContent=""}
@@ -127,11 +141,11 @@ $("#go").onclick=async()=>{const out=$("#out"),btn=$("#go");btn.disabled=true;bt
 async function play(d){const r=d.result,out=$("#out");
  const t=el("div","card");t.append(el("h2",0,"What the agent did, step by step"));const ol=el("ol","tl");t.append(ol);out.append(t);rise(t);
  for(const s of d.trace){const [txt,cls,ev]=say(s);const nk=s.agent==="data"?"deploy":s.agent;const n=nodeEl[nk];
-  if(n){Object.values(nodeEl).forEach(x=>x.classList.remove("on","rej"));n.classList.add("on","done");if(cls==="rej")n.classList.add("rej")}
+  if(window.__machine)window.__machine.step(s.agent==="data"?"data":s.agent,cls||"");if(n){Object.values(nodeEl).forEach(x=>x.classList.remove("on","rej"));n.classList.add("on","done");if(cls==="rej")n.classList.add("rej")}
   $("#now").textContent=txt;const li=el("li",cls||"");li.append(el("span","tag",s.agent),document.createTextNode(txt));if(ev&&ev.length)li.append(...chips(ev));ol.append(li);fx(li,{opacity:[0,1],x:[-10,0]},{duration:.3});ol.scrollTop=ol.scrollHeight;await sleep(s.agent==="evaluator"?420:230)}
  Object.values(nodeEl).forEach(x=>x.classList.remove("on","rej"));$("#now").textContent="Finished.";
  reveal(d)}
-function reveal(d){const r=d.result,out=$("#out"),ok=r.status==="confirmed",pct=Math.round(r.confidence*100);
+function reveal(d){const r=d.result,out=$("#out"),ok=r.status==="confirmed",pct=Math.round(r.confidence*100);window.__machine&&window.__machine.finish(ok);
  history.push({title:titles[sel],rounds:r.rounds,fast:r.memory&&r.memory.fast_path});
  const v=el("div","card verdict"),C=2*Math.PI*52;
  const ring=el("div","ring"),sv=document.createElementNS("http://www.w3.org/2000/svg","svg");sv.setAttribute("width",118);sv.setAttribute("height",118);
@@ -159,4 +173,4 @@ function reveal(d){const r=d.result,out=$("#out"),ok=r.status==="confirmed",pct=
  if(r.ruled_out&&r.ruled_out.length){const q=el("div","card");q.append(el("h2",0,"Ruled out"));r.ruled_out.forEach(x=>{const p=el("div","pt");p.append(el("span","chip",x.sha),document.createTextNode(" "+x.reason));q.append(p)});out.append(q);rise(q,4)}
  v.scrollIntoView({behavior:reduce?"auto":"smooth",block:"nearest"})}
 load();
-</script></body></html>
+</script><script type="module" src="/factory.js"></script></body></html>

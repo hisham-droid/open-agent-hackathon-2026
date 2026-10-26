@@ -75,6 +75,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             return self._send(200, (WEB / "index.html").read_bytes(), "text/html; charset=utf-8")
+        static = (self.path.split("?")[0].lstrip("/"))
+        if static and static.split("/")[0] in ("vendor",) or static in ("factory.js",):
+            f = (WEB / static).resolve()
+            if WEB.resolve() in f.parents and f.is_file():
+                return self._send(200, f.read_bytes(), "text/javascript; charset=utf-8" if f.suffix == ".js" else "text/plain")
         if self.path == "/api/scenarios":
             return self._send(200, {"scenarios": scenario_list(), "model_configured": bool(os.environ.get("METERLESS_RUNTIME_TOKEN"))})
         self._send(404, {"error": "not found"})

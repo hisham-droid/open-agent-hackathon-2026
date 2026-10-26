@@ -123,3 +123,13 @@ A ready-to-use GitHub Actions workflow is in `docs/ci-workflow.yml.example` (cop
 | `scenarios/contradicted-by-prod/` | `sample_outputs/scenario-contradicted-by-prod/` | The obvious suspect is already fixed in production |
 | Live Zetaris data | `sample_outputs/live-run-1/`, `live-run-2/`, `live-run-3/` | Real runs through Zetaris, Nightshift and Nemotron; `trace.jsonl` logs the model for each request |
 | Three sessions | `sample_outputs/session-1..3/` | Memory carrying over between incidents |
+
+## Judging without live access
+
+Sample mode is the baseline and needs no accounts, credentials or sign-in: `python3 -m agent.main` (or `python3 -m agent.server` for the web app). Everything above, including the evaluation, the stress test and the follow-up questions, runs in sample mode.
+
+Live mode is shown in the demo video: a real request through Zetaris and Meterless Nightshift to NVIDIA Nemotron. We do not run a public gateway. Live mode needs your own local Zetaris and Nightshift (see "Run it live"), and `sample_outputs/live-run-*` hold the traces of real live runs, including which model handled each request. No tokens or secrets are in this repository.
+
+## The 3D machine
+
+The web app opens on a 3D model of the agent (procedural three.js, vendored in `agent/web/vendor/`, no network needed). Evidence packets ride a belt through Zetaris, the planner, four specialists, the evaluator gate and the explainer, with H-MEM beside it. During an investigation, an amber packet follows the agent from station to station and the evaluator gate flashes red on a rejection and green on acceptance.
