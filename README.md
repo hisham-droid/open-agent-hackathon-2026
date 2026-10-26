@@ -111,3 +111,15 @@ After the evaluator decides, Nemotron (through Nightshift) writes a plain-Englis
 After an investigation, the web app lets you ask things like "why was 77bb88c ruled out?" or "how sure are you?". Answers come only from verified facts, carry evidence ids, and a model's answer is rejected if it cites something unknown or invents an identifier.
 
 A ready-to-use GitHub Actions workflow is in `docs/ci-workflow.yml.example` (copy it to `.github/workflows/test.yml`).
+
+## Sample inputs and outputs
+
+| Input (data) | Output (report and trace) | What it shows |
+|---|---|---|
+| `sample_data/` | `sample_outputs/scenario-planted/` | Renamed setting, CI green, production missing it |
+| `scenarios/other-service-secret/` | `sample_outputs/scenario-other-service-secret/` | A different commit is the culprit |
+| `scenarios/dependency-version-skew/` | `sample_outputs/scenario-dependency-version-skew/` | Package upgrade CI installed but production never got |
+| `scenarios/infrastructure-outage/` | `sample_outputs/scenario-infrastructure-outage/` | No commit explains it, so the answer is inconclusive |
+| `scenarios/contradicted-by-prod/` | `sample_outputs/scenario-contradicted-by-prod/` | The obvious suspect is already fixed in production |
+| Live Zetaris data | `sample_outputs/live-run-1/`, `live-run-2/`, `live-run-3/` | Real runs through Zetaris, Nightshift and Nemotron; `trace.jsonl` logs the model for each request |
+| Three sessions | `sample_outputs/session-1..3/` | Memory carrying over between incidents |
