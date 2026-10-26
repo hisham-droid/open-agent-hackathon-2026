@@ -1,0 +1,55 @@
+[
+ {
+  "run_id": "ci-a1b2c3d",
+  "sha": "a1b2c3d",
+  "ts": "2026-10-21T09:20:00Z",
+  "status": "passed",
+  "env_keys": [
+   "CI",
+   "DB_POOL"
+  ]
+ },
+ {
+  "run_id": "ci-d4e5f6a",
+  "sha": "d4e5f6a",
+  "ts": "2026-10-22T11:40:00Z",
+  "status": "passed",
+  "env_keys": [
+   "CI",
+   "DB_POOL"
+  ]
+ },
+ {
+  "run_id": "ci-9f8e7d6",
+  "sha": "9f8e7d6",
+  "ts": "2026-10-22T16:55:00Z",
+  "status": "passed",
+  "env_keys": [
+   "CI",
+   "DATABASE_POOL_SIZE"
+  ]
+ },
+ {
+  "run_id": "ci-55aa66b",
+  "sha": "55aa66b",
+  "ts": "2026-10-23T09:10:00Z",
+  "status": "passed",
+  "env_keys": [
+   "CI",
+   "DATABASE_POOL_SIZE"
+  ],
+  "packages": {
+   "pydantic": "2.5.0"
+  }
+ },
+ {
+  "run_id": "ci-77bb88c",
+  "sha": "77bb88c",
+  "ts": "2026-10-23T12:30:00Z",
+  "status": "passed",
+  "env_keys": [
+   "CI",
+   "DATABASE_POOL_SIZE"
+  ]
+ }
+]

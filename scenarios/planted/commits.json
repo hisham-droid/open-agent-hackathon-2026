@@ -1,0 +1,53 @@
+[
+ {
+  "sha": "a1b2c3d",
+  "ts": "2026-10-21T09:10:00Z",
+  "author": "sam",
+  "message": "Refactor payment client retries",
+  "files": [
+   "payments/client.py"
+  ],
+  "diff": "--- a/payments/client.py\n+++ b/payments/client.py\n-    resp = post(url)\n+    resp = post_with_backoff(url)"
+ },
+ {
+  "sha": "d4e5f6a",
+  "ts": "2026-10-22T11:30:00Z",
+  "author": "priya",
+  "message": "Bump lodash to 4.17.21",
+  "files": [
+   "package.json"
+  ],
+  "diff": "--- a/package.json\n+++ b/package.json\n-    \"lodash\": \"4.17.20\"\n+    \"lodash\": \"4.17.21\""
+ },
+ {
+  "sha": "9f8e7d6",
+  "ts": "2026-10-22T16:45:00Z",
+  "author": "alex",
+  "message": "Rename DB_POOL to DATABASE_POOL_SIZE for clarity",
+  "files": [
+   "config/settings.py",
+   ".github/workflows/ci.yml"
+  ],
+  "diff": "--- a/config/settings.py\n+++ b/config/settings.py\n-pool = int(os.environ.get('DB_POOL', 10))\n+pool = int(os.environ['DATABASE_POOL_SIZE'])\n--- a/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n+        DATABASE_POOL_SIZE: 5"
+ },
+ {
+  "sha": "55aa66b",
+  "ts": "2026-10-23T09:00:00Z",
+  "author": "sam",
+  "message": "Update README with setup notes",
+  "files": [
+   "README.md"
+  ],
+  "diff": "--- a/README.md\n+++ b/README.md\n+Run `make dev` to start locally."
+ },
+ {
+  "sha": "77bb88c",
+  "ts": "2026-10-23T12:20:00Z",
+  "author": "priya",
+  "message": "Add retry to email sender",
+  "files": [
+   "mailer/sender.py"
+  ],
+  "diff": "--- a/mailer/sender.py\n+++ b/mailer/sender.py\n+    for attempt in range(3):\n+        if send(msg): break"
+ }
+]

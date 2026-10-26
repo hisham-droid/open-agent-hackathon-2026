@@ -1,0 +1,2 @@
+{"ts": "2026-10-26T11:06:04+0000", "memoryId": "-", "action": "hydrate", "actor": "run:run-1", "details": {"long_term": 0, "working": 0, "decayed": 0}}
+{"ts": "2026-10-26T11:06:04+0000", "memoryId": "mem-06d447bdf8", "action": "create", "actor": "logs", "details": {"layer": "short_term", "type": "factual", "agentId": "logs", "runId": "run-1", "taskId": "log.analyze", "tags": ["tool_result", "logs"]}}

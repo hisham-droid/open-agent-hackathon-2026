@@ -6,7 +6,7 @@ import sys
 from .data import SampleDataset
 from .env import load_env
 from .hmem import HMem
-from .nvidia import NemotronGenerator
+from .nightshift import NightshiftGenerator
 from .orchestrator import investigate
 from .report import render
 from .trace import Trace
@@ -40,7 +40,7 @@ def main(argv=None):
             dataset = ZetarisDataset()
         except ZetarisError as e:
             sys.exit(f"Zetaris source failed: {e}")
-    _, report = run(a.question, a.data, a.out, a.memory, dataset=dataset, generator=NemotronGenerator.from_env())
+    _, report = run(a.question, a.data, a.out, a.memory, dataset=dataset, generator=NightshiftGenerator.from_env())
     print(report)
 
 

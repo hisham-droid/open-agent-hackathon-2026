@@ -26,14 +26,14 @@ flowchart LR
   E -->|accept at 0.85+ with all checks| R[Report + trace]
   Z[(Zetaris SQL over REST)] --> S
   S -->|events| M[H-MEM: mine, store, retrieve, ledger]
-  N[NVIDIA Nemotron] -.->|mining model| M
+  N[Meterless Nightshift to NVIDIA Nemotron] -.->|mining model| M
   M -->|recalled lessons shape the plan| P
   E -->|outcome feedback| M
 ```
 
 ## Run it live (Zetaris + Nemotron)
 
-Set `SAMPLE_MODE=false` and fill `.env` (see `.env.example`), with Zetaris running locally, then `python3 -m agent.main`. Proof runs are saved in `sample_outputs/live-run-1` (cold start) and `sample_outputs/live-run-2` (the lesson from run 1 is recalled, 1 round instead of 4).
+Set `SAMPLE_MODE=false` and fill `.env` (see `.env.example`), with Zetaris running locally, then `python3 -m agent.main`. Proof runs are saved in `sample_outputs/live-run-1` (cold start, 4 rounds) and `live-run-2` (the lesson from run 1 is recalled, 1 round). Both used Zetaris for data and Nemotron through Nightshift for memory mining.
 
 ## Docker
 
@@ -65,10 +65,49 @@ Honest status as of the last commit:
 | Agent loop, trace, tests, SAMPLE_MODE | Working |
 | Zetaris as the data layer | Integrated and verified live: the agent reads commits, deploys, CI runs, logs and prod env through SQL over the Zetaris REST API (`SAMPLE_MODE=false`). Offline tests use a fake runner; the live test is opt-in (`RUN_LIVE_ZETARIS=1`). |
 | Meterless engine (H-MEM) | Implemented in Python from the H-MEM Agent Engine reference architecture, in `agent/hmem/`: tiered store, runtime-event mining (with a no-model fallback), hybrid retrieval with reinjection payload, JSONL trust ledger, feedback adaptation, warm start with forgetting curve. Not implemented: dreaming, sleep/consolidation, conflict resolution. No Meterless runtime token is used; memory is local. |
-| NVIDIA Nemotron | Integrated and verified live (`nvidia/nemotron-3.5-bolt-e4b` by default, override with `NVIDIA_MODEL`). It acts as the H-MEM mining model that turns each specialist result into durable memories. If the call fails or no key is set, mining falls back to plain summaries. It never decides the diagnosis; the evaluator does. |
+| Meterless Nightshift + NVIDIA Nemotron | Integrated and verified live. All model calls go through Nightshift (`agent/nightshift.py`, OpenAI-compatible endpoint, default `http://localhost:8088/v1`). Nightshift routes to NVIDIA `nemotron-3-ultra-550b-a55b`, and the trace logs which model answered each request (`sample_outputs/live-run-*/trace.jsonl`, fields `model` and `provider`). The NVIDIA key lives in Nightshift's Providers tab, not in this project. Nightshift is optional at runtime: if it is off, mining falls back to plain summaries. |
 
 Secrets go in `.env` (see `.env.example`). `.env` is gitignored.
 
 ## Pre-existing work
 
 None. Everything in this repo was created during the build window.
+
+## Sponsor technology explanation
+
+**Zetaris (data layer).** Commits, deploys, CI runs, logs and production env live as REST tables in a local Zetaris instance (Lightning SQL over GitHub-hosted JSON). The agent reads everything with SQL through the Zetaris REST API (`agent/zetaris_source.py`); the exact queries are logged in the trace. Without Zetaris, `SAMPLE_MODE=true` reads the same data from `sample_data/`.
+
+**Meterless H-MEM engine.** Implemented in `agent/hmem/` from the H-MEM Agent Engine reference: tiered memory (short-term, working, long-term), mining of runtime events into memories, hybrid retrieval with a reinjection payload, a JSONL trust ledger, feedback adaptation and warm start with a forgetting curve. What it does here: after the first failure is investigated the agent saves a lesson; in a later, different incident the lesson is retrieved, the planner runs the likely checks together, and the outcome is fed back to raise or lower the lesson's confidence. Test: `tests/test_hmem.py` (cold start saves a lesson, the lesson carries to a different incident, confidence grows with helpful feedback, a contradicting incident marks the lesson wrong and is not confirmed, ledger and retrieval trace are written, unrelated queries retrieve nothing). Not implemented: dreaming, consolidation, conflict resolution.
+
+**Meterless Nightshift (AI provider).** The only AI calls (memory mining) go through Nightshift's OpenAI-compatible endpoint with the Runtime API key (`METERLESS_BASE_URL`, `METERLESS_RUNTIME_TOKEN`). The model that answered each request is recorded in the trace.
+
+**NVIDIA.** Nemotron models are connected inside Nightshift (Providers tab). Live runs used `nvidia/nemotron-3-ultra-550b-a55b`, visible per request in the trace. Nemotron does not decide the diagnosis; it turns specialist output into durable memories, and the evaluator verifies every conclusion from evidence.
+
+**What is unique.** Memory shapes the plan but never lowers the evidence bar: a recalled lesson can only reorder work, and the evaluator still requires every check to pass, so a wrong memory gets marked wrong instead of producing a confident wrong answer.
+
+## Docker with Zetaris and Nightshift
+
+Inside a container `localhost` is the container. For live mode use `host.docker.internal`:
+`docker run --rm --env-file .env -e SAMPLE_MODE=false -e METERLESS_BASE_URL=http://host.docker.internal:8088/v1 -e ZETARIS_REST_URL=http://host.docker.internal:8888/api/v1.0 build-detective`
+
+## Does it generalise? (evaluation)
+
+`python3 scripts/evaluate.py` runs the agent on six different incidents built from the same data layer and checks the verdict on each. Three are real root causes in different commits and of two kinds (a required setting production lacks, and a package upgrade production never received); three are cases where the right answer is to refuse to name a cause (an infrastructure outage no commit explains, and suspects that production contradicts). Results are in `sample_outputs/evaluation.md`, and each scenario's input and output is in `scenarios/` and `sample_outputs/scenario-*`.
+
+## Explanations you can check
+
+After the evaluator decides, Nemotron (through Nightshift) writes a plain-English explanation. It cannot change the verdict. Every point must cite an evidence id the agent collected, and any output that cites an unknown id, invents a commit or setting name, or overclaims on an inconclusive verdict is rejected and replaced by a template. The report says which one you are reading and which model wrote it.
+
+## The web app
+
+`python3 -m agent.server` then open http://localhost:8000. Pick an incident, press Investigate, and watch the agent's steps, verdict, evidence ids and the cited explanation. Run "Renamed setting breaks production" and then "Same failure, different names" to see memory cut the work from four rounds to one. With `SAMPLE_MODE=false` a "Live data from Zetaris" option appears.
+
+## Stress test
+
+`python3 scripts/benchmark.py 400` generates 400 random incidents (random number of commits, culprit position, decoy commits including near-misses that require a different setting, noisy warnings, and four outcome types). Latest result in `sample_outputs/benchmark.md`: all 400 verdicts correct, 242 of 242 real causes named correctly, 158 of 158 non-causes refused, zero false confirmations. These incidents are synthetic and generated by us from the same schema, so read this as a check on the agent's logic, not as a claim about real-world accuracy.
+
+## Follow-up questions
+
+After an investigation, the web app lets you ask things like "why was 77bb88c ruled out?" or "how sure are you?". Answers come only from verified facts, carry evidence ids, and a model's answer is rejected if it cites something unknown or invents an identifier.
+
+A ready-to-use GitHub Actions workflow is in `docs/ci-workflow.yml.example` (copy it to `.github/workflows/test.yml`).

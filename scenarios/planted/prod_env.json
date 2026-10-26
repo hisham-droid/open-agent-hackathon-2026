@@ -1,0 +1,10 @@
+{
+ "deploy_id": "d-102",
+ "keys": {
+  "DB_POOL": "20",
+  "DATABASE_URL": "redacted",
+  "LOG_LEVEL": "info",
+  "PORT": "8080",
+  "MAIL_HOST": "smtp.internal"
+ }
+}

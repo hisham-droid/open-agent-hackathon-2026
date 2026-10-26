@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Build-Failure Detective</title>
+<style>
+:root{--bg:#f6f4ef;--card:#fffdf9;--ink:#23262b;--mute:#6b7078;--line:#e4dfd3;--acc:#2f7d6d;--accbg:#e3f0ec;--warn:#b5651d;--warnbg:#f8ead8;--bad:#a8403a;--badbg:#f7e1de;--mono:ui-monospace,SFMono-Regular,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1d20;--card:#232629;--ink:#ecebe6;--mute:#9aa0a8;--line:#34383d;--acc:#6cc3b0;--accbg:#233a35;--warn:#e0a45f;--warnbg:#3a2e1f;--bad:#e58a82;--badbg:#3d2523}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 16px 64px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}.sub{color:var(--mute);margin:0 0 24px}
+.grid{display:grid;grid-template-columns:320px 1fr;gap:20px}@media(max-width:820px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:0 0 10px;font-weight:600}
+.sc{display:block;width:100%;text-align:left;background:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;color:inherit;font:inherit}
+.sc:hover{border-color:var(--acc)}.sc[aria-pressed=true]{border-color:var(--acc);background:var(--accbg)}
+.sc b{display:block;font-size:15px}.sc span{color:var(--mute);font-size:13px}
+.btn{background:var(--acc);color:#fff;border:0;border-radius:10px;padding:11px 16px;font:inherit;font-weight:600;cursor:pointer;width:100%}
+.btn:disabled{opacity:.6;cursor:wait}.ghost{background:none;color:var(--mute);border:0;font:inherit;font-size:13px;cursor:pointer;margin-top:10px;padding:0;text-decoration:underline}
+label.t{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--mute);margin:12px 0}
+.verdict{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.pill{border-radius:99px;padding:3px 12px;font-size:13px;font-weight:600}.ok{background:var(--accbg);color:var(--acc)}.no{background:var(--warnbg);color:var(--warn)}
+.big{font-size:19px;font-weight:600;margin:6px 0 4px}.mute{color:var(--mute)}
+ol.tl{list-style:none;margin:0;padding:0;border-left:2px solid var(--line);margin-left:6px}
+ol.tl li{padding:2px 0 10px 16px;position:relative;font-size:14.5px;animation:in .25s ease}
+ol.tl li:before{content:"";position:absolute;left:-6px;top:8px;width:10px;height:10px;border-radius:50%;background:var(--line)}
+ol.tl li.ev:before{background:var(--acc)}ol.tl li.rej:before{background:var(--warn)}ol.tl li.mem:before{background:#7a6bb5}
+.tag{font-family:var(--mono);font-size:11.5px;color:var(--mute);margin-right:6px}
+@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+.chip{font-family:var(--mono);font-size:12px;background:var(--accbg);color:var(--acc);border-radius:6px;padding:1px 6px;margin-left:4px;white-space:nowrap}
+.pt{margin:6px 0}.fix{background:var(--accbg);border-radius:10px;padding:10px 12px;margin-top:12px}
+.checks{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.checks span{font-size:13px;border-radius:8px;padding:2px 10px}
+.model{font-size:13px;color:var(--mute);margin-bottom:8px}.err{background:var(--badbg);color:var(--bad);padding:10px 12px;border-radius:10px}
+.empty{color:var(--mute);text-align:center;padding:48px 8px}.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:r .8s linear infinite;vertical-align:-2px;margin-right:6px}@keyframes r{to{transform:rotate(360deg)}}
+.askrow{display:flex;gap:8px;margin-top:14px}.askrow input{flex:1;font:inherit;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}.askrow button{width:auto;padding:9px 16px}
+.ans{margin-top:10px;background:var(--bg);border-radius:10px;padding:10px 12px}
+.stack>*+*{margin-top:16px}
+</style></head><body><div class="wrap">
+<h1>Build-Failure Detective</h1>
+<p class="sub">An agent that finds why a deploy failed, shows its evidence, and says so when it can't be sure.</p>
+<div class="grid">
+ <div>
+  <div class="card"><h2>Pick an incident</h2><div id="list"></div>
+   <label class="t"><input type="checkbox" id="usemodel" checked> Let Nemotron write the explanation</label>
+   <button class="btn" id="go" disabled>Investigate</button>
+   <button class="ghost" id="reset">Forget what the agent learned</button>
+  </div>
+ </div>
+ <div class="stack" id="out"><div class="card empty">Choose an incident and press Investigate.<br>Run two similar ones in a row to watch memory kick in.</div></div>
+</div></div>
+<script>
+const $=(s,r=document)=>r.querySelector(s);
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+let sel=null;
+const chips=ids=>ids.map(i=>el("span","chip",i));
+function say(s){const a=s.agent,x=s.action;
+ if(a==="planner"&&x==="start")return["Question received: "+s.question];
+ if(a==="data")return["Loaded data from "+s.source+(s.row_counts?" ("+Object.values(s.row_counts).reduce((p,c)=>p+c,0)+" rows)":""),"ev"];
+ if(a==="hmem"&&x==="hydrate")return["Memory loaded","mem"];
+ if(a==="deploy"&&x==="deploy.locate")return["Failed deploy "+s.failed+", last good "+s.last_good+"; "+(s.window||[]).length+" commits in between","ev",s.evidence];
+ if(a==="logs")return[s.primary?"First error: "+s.primary:"No error lines found","ev",s.evidence];
+ if(a==="hmem"&&x==="retrieve")return[s.hits.length?"Recalled "+s.hits.length+" lesson (match "+s.hits[0].score+")":"Nothing in memory yet","mem"];
+ if(a==="hmem"&&x==="mine")return["Wrote a memory note ("+(s.mode==="model"?"by "+s.model:"no-model fallback")+")","mem"];
+ if(a==="planner"&&x==="plan_from_memory")return["Memory shaped the plan: run commit, env and CI checks together","mem"];
+ if(a==="commits")return["Ranked "+s.ranked.length+" commits; top: "+(s.ranked[0]?s.ranked[0].sha+(s.ranked[0].introduced.length?" introduces "+s.ranked[0].introduced.join(", "):" (no overlap)"):"none"),"ev"];
+ if(a==="deploy"&&x==="env.check")return["Production env missing "+(s.missing.join(", ")||"nothing")+" for "+s.candidate,"ev",s.evidence];
+ if(a==="ci")return["CI run green: "+s.green+", defines the setting: "+s.ci_defines_token,"ev",s.evidence];
+ if(a==="evaluator")return["Round "+s.round+": "+s.verdict.toUpperCase()+" at "+Math.round(s.confidence*100)+"% ("+s.critique+")",s.verdict==="accept"?"ev":"rej"];
+ if(a==="planner"&&x==="replan")return["Replanning: "+(s.next_actions.length?s.next_actions.join(", "):"nothing more to check"),"rej"];
+ if(a==="hmem"&&x==="feedback")return["Memory told it was "+s.verdict+"; confidence now "+s.confidence_after,"mem"];
+ if(a==="hmem"&&x==="remember_lesson")return["Saved a lesson to long-term memory","mem"];
+ if(a==="explainer")return[s.mode==="model"?"Explanation written by "+s.model+", all citations checked":"Template explanation"+(s.rejected?" (model output rejected)":""),"ev"];
+ if(a==="planner"&&x==="finish")return["Done: "+s.status+" in "+s.rounds+" rounds"];
+ return[a+" "+x]}
+async function load(){const r=await (await fetch("/api/scenarios")).json();const l=$("#list");
+ if(!r.model_configured){$("#usemodel").checked=false;$("#usemodel").disabled=true}
+ r.scenarios.forEach((s,i)=>{const b=el("button","sc");b.type="button";b.setAttribute("aria-pressed","false");b.append(el("b",0,s.title),el("span",0,s.blurb));
+  b.onclick=()=>{sel=s.id;l.querySelectorAll(".sc").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");$("#go").disabled=false};l.append(b);if(i===0)b.click()})}
+$("#reset").onclick=async()=>{await fetch("/api/reset",{method:"POST",body:"{}"});$("#out").replaceChildren(el("div","card empty","Memory cleared. The next run is a cold start."))};
+$("#go").onclick=async()=>{const out=$("#out"),btn=$("#go");btn.disabled=true;btn.textContent="Investigating...";
+ const w=el("div","card");w.append(el("span","spin"),document.createTextNode("The agent is working. With a model on the line this takes a minute or two."));out.replaceChildren(w);
+ try{const res=await fetch("/api/investigate",{method:"POST",body:JSON.stringify({scenario:sel,use_model:$("#usemodel").checked})});const d=await res.json();
+  if(d.error)throw new Error(d.error);render(d)}catch(e){out.replaceChildren(el("div","err","Something went wrong: "+e.message))}
+ btn.disabled=false;btn.textContent="Investigate"};
+function render(d){const r=d.result,out=$("#out");out.replaceChildren();
+ const v=el("div","card"),ok=r.status==="confirmed";
+ const row=el("div","verdict");row.append(el("span","pill "+(ok?"ok":"no"),ok?"Confirmed":"Inconclusive"),el("span","mute",Math.round(r.confidence*100)+"% confidence, "+r.rounds+" rounds"+(r.memory&&r.memory.fast_path?", memory-guided":"")));
+ v.append(row,el("div","big",r.cause));
+ const ck=el("div","checks");Object.entries(r.checks||{}).forEach(([k,s])=>{const c=el("span","pill "+(s==="pass"?"ok":"no"),k.replace(/_/g," ")+": "+s);ck.append(c)});v.append(ck);out.append(v);
+ const ex=r.explanation;if(ex){const c=el("div","card"),k=ex.content;c.append(el("h2",0,"In plain English"),
+  el("div","model",ex.mode==="model"?"Written by "+ex.model+" through Meterless Nightshift. Every citation was checked against the agent's evidence.":"Template. "+(ex.rejected?"The model's answer failed the evidence check.":"No model used.")),el("div",0,k.summary));
+  k.points.forEach(p=>{const d=el("div","pt",p.text);d.append(...chips(p.cites));c.append(d)});
+  const f=el("div","fix");f.append(el("b",0,"Suggested fix: "),document.createTextNode(k.fix.text),...chips(k.fix.cites));c.append(f);
+  const row=el("div","askrow"),inp=el("input");inp.placeholder="Ask a follow-up, e.g. why was the email commit ruled out?";inp.setAttribute("aria-label","Follow-up question");
+  const ab=el("button","btn","Ask"),box=el("div");row.append(inp,ab);c.append(row,box);
+  const go=async()=>{const q=inp.value.trim();if(!q)return;ab.disabled=true;box.replaceChildren(el("div","ans","Thinking..."));
+   try{const a=await (await fetch("/api/ask",{method:"POST",body:JSON.stringify({question:q,use_model:$("#usemodel").checked})})).json();
+    if(a.error)throw new Error(a.error);const d=el("div","ans",a.answer);d.append(...chips(a.cites));d.append(el("div","model",a.mode==="model"?"Answered by "+a.model+", citations checked":"Answered from the agent's verified facts"));box.replaceChildren(d)}
+   catch(e){box.replaceChildren(el("div","err",e.message))}ab.disabled=false};
+  ab.onclick=go;inp.onkeydown=e=>{if(e.key==="Enter")go()};out.append(c)}
+ const t=el("div","card");t.append(el("h2",0,"What the agent did, step by step"));const ol=el("ol","tl");t.append(ol);out.append(t);
+ d.trace.forEach((s,i)=>setTimeout(()=>{const [txt,cls,ev]=say(s);const li=el("li",cls||"");li.append(el("span","tag",s.agent),document.createTextNode(txt));if(ev&&ev.length)li.append(...chips(ev));ol.append(li)},i*90));
+ if(r.ruled_out&&r.ruled_out.length){const q=el("div","card");q.append(el("h2",0,"Ruled out"));r.ruled_out.forEach(x=>{const p=el("div","pt");p.append(el("span","chip",x.sha),document.createTextNode(" "+x.reason));q.append(p)});out.append(q)}}
+load();
+</script></body></html>

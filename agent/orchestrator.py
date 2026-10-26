@@ -1,5 +1,6 @@
 """Planner -> specialists -> evaluator loop. The evaluator can reject, which forces the planner to retry or branch."""
-from .specialists import DeploySpecialist, LogSpecialist, CommitSpecialist, CISpecialist, TOKEN_RE
+from .explain import explain
+from .specialists import DeploySpecialist, LogSpecialist, CommitSpecialist, CISpecialist, shape_of
 
 WEIGHTS = {"log_signature": 0.30, "commit_introduces": 0.30, "prod_env_missing": 0.25, "ci_explains_green": 0.15}
 ACCEPT_AT = 0.85
@@ -84,7 +85,9 @@ def investigate(ds, trace, memory, question, run_id="run-1"):
 
     def mine(agent, task, summary, kind="tool_result"):
         made, mode = memory.mine({"kind": kind, "summary": summary}, agent, run_id, task)
-        trace.log("hmem", "mine", source_agent=agent, task=task, memories=[m["id"] for m in made], mode=mode)
+        gen = getattr(memory, "generator", None)
+        trace.log("hmem", "mine", source_agent=agent, task=task, memories=[m["id"] for m in made], mode=mode,
+                  model=getattr(gen, "last_model", None) if mode == "model" else None, provider="meterless-nightshift" if gen else None)
 
     def run(action):
         if action == "deploy.locate":
@@ -98,7 +101,7 @@ def investigate(ds, trace, memory, question, run_id="run-1"):
             trace.log("logs", action, primary=r["primary"] and r["primary"]["msg"], tokens=r["tokens"], evidence=r["evidence"])
             if r["primary"]:
                 # Query by failure shape, not by this incident's variable name, so lessons generalise across incidents.
-                shape = TOKEN_RE.sub("", r["primary"]["msg"])
+                shape = shape_of(r["primary"]["msg"])
                 query = f"{shape} deploy failed startup"
                 payload = memory.retrieve(query, "planner", run_id)
                 state["memory_payload"] = payload
@@ -118,13 +121,13 @@ def investigate(ds, trace, memory, question, run_id="run-1"):
                 mine("commits", action, f"Commit {r[0]['sha']} ('{r[0]['message']}') introduced {', '.join(r[0]['introduced'])}")
         elif action == "env.check":
             cand = evaluator.candidate(state)
-            r = deploy_sp.check_env(ds, cand["introduced"])
+            r = deploy_sp.check_env(ds, cand["introduced"], cand.get("required"))
             state["env"] = r
             trace.log("deploy", action, candidate=cand["sha"], missing=r["missing"], present=r["present"], evidence=r["evidence"])
             mine("deploy", action, f"Production env missing {r['missing'] or 'nothing'}; defines {r['present'] or 'none'}")
         elif action == "ci.analyze":
             cand = evaluator.candidate(state)
-            r = ci_sp.analyze(ds, cand["sha"], cand["introduced"])
+            r = ci_sp.analyze(ds, cand["sha"], cand["introduced"], cand.get("required"))
             state["ci"] = r
             trace.log("ci", action, candidate=cand["sha"], green=r["green"], ci_defines_token=r["defines_token"], evidence=r["evidence"])
             mine("ci", action, f"CI run {r['run']} green={r['green']}, CI defines the variable={r['defines_token']}")
@@ -177,13 +180,21 @@ def investigate(ds, trace, memory, question, run_id="run-1"):
               "failed_deploy": state["deploy"]["failed"], "last_good": state["deploy"]["last_good"],
               "primary_log": state["log"]["primary"], "primary_log_id": state["log"].get("primary_id"),
               "env": state["env"], "ci": state["ci"]}
+    fid = state["deploy"]["failed"]["id"]
+    result["scope"] = {"commits_in_window": len(state["deploy"]["window"]),
+                       "log_lines": sum(1 for l in ds.logs if l["deploy_id"] == fid),
+                       "ci_runs": len(ds.ci_runs), "candidates_checked": len(state["rejected"]) + (1 if cand else 0)}
     mem = {"retrieved": [m for m in (state["memory_payload"] or {}).get("memories", [])],
            "strategy": (state["memory_payload"] or {}).get("strategy"), "fast_path": state["fast_path"],
            "feedback": None, "lesson_id": None}
 
     if status == "confirmed" and cand:
-        result["cause"] = (f"Commit {cand['sha']} ('{cand['message']}') made {', '.join(cand['introduced'])} a required setting, "
-                           f"but production does not define it, so the new version aborted at startup and failed its health check.")
+        if state["env"] and state["env"].get("kind") == "package":
+            result["cause"] = (f"Commit {cand['sha']} ('{cand['message']}') moved {', '.join(cand['introduced'])} to a new version, but "
+                               f"{'; '.join(state['env']['notes'])}, so the new code failed at startup. CI installed the new version, which is why it stayed green.")
+        else:
+            result["cause"] = (f"Commit {cand['sha']} ('{cand['message']}') made {', '.join(cand['introduced'])} a required setting, "
+                               f"but production does not define it, so the new version aborted at startup and failed its health check.")
     else:
         lead = f" Leading suspect: commit {cand['sha']} ('{cand['message']}')." if cand else ""
         result["cause"] = "Inconclusive: the evidence does not support a single root cause." + lead
@@ -198,8 +209,12 @@ def investigate(ds, trace, memory, question, run_id="run-1"):
         trace.log("hmem", "feedback", **mem["feedback"])
 
     if status == "confirmed" and cand and state["env"] and state["env"]["missing"]:
+        pkg = state["env"].get("kind") == "package"
         lesson = memory.remember_lesson(
-            FAILURE_CLASS,
+            "dependency-version-skew-in-prod" if pkg else FAILURE_CLASS,
+            ("Deploy fails at startup with an ImportError or missing module. Check whether a recent commit moved that package "
+             "to a new version, then which version production actually runs. CI can stay green because it installs the new "
+             "version while production keeps the old one.") if pkg else
             "Deploy fails at startup with a KeyError or 'required environment variable not set'. Check whether a recent "
             "commit made that variable required, then whether production defines it. CI can stay green when CI defines "
             "the variable but production does not.",
@@ -208,6 +223,11 @@ def investigate(ds, trace, memory, question, run_id="run-1"):
         mem["lesson_id"] = lesson["id"]
         trace.log("hmem", "remember_lesson", memory_id=lesson["id"], layer=lesson["layer"],
                   confidence=lesson["confidence"], access_count=lesson["accessCount"])
+    ex = explain(result, getattr(memory, "generator", None))
+    result["explanation"] = ex
+    trace.log("explainer", "explain", mode=ex["mode"], model=ex["model"], provider=ex["provider"],
+              cited_evidence=sorted({c for p in ex["content"]["points"] + [ex["content"]["fix"]] for c in p["cites"]}),
+              facts_available=ex["evidence_count"], rejected=ex["rejected"])
     memory.close()
     result["memory"] = mem
     trace.log("planner", "finish", status=status, confidence=result["confidence"], rounds=rounds,

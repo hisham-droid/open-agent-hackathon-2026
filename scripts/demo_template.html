@@ -1,0 +1,174 @@
+<title>Build-Failure Detective</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap">
+<style>
+/* Layout: left = replayable investigation log, right = live evaluator state, suspects, verdict */
+:root{
+  --bg:#EDF0F2; --panel:#F8FAFB; --ink:#1B2730; --muted:#5C6B76; --line:#D5DCE1;
+  --accent:#0E7C86; --accent-soft:#D6EBED; --warn:#B7791F; --warn-soft:#F5E8CC; --ok:#2F7D4F; --ok-soft:#D8EDE0; --bad:#B4443C; --bad-soft:#F3DAD7;
+  --mem:#6A5BB0; --mem-soft:#E4E0F4;
+  --display:'Bricolage Grotesque',system-ui,sans-serif; --body:'Source Sans 3',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12191E; --panel:#1A242B; --ink:#E4EBEF; --muted:#8FA0AB; --line:#2C3A44;
+  --accent:#4FB8C2; --accent-soft:#17353A; --warn:#E0A94A; --warn-soft:#3A2F17; --ok:#6CC38E; --ok-soft:#173225; --bad:#E17F76; --bad-soft:#3B1E1B;
+  --mem:#A99BE6; --mem-soft:#2A2547; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12191E; --panel:#1A242B; --ink:#E4EBEF; --muted:#8FA0AB; --line:#2C3A44;
+  --accent:#4FB8C2; --accent-soft:#17353A; --warn:#E0A94A; --warn-soft:#3A2F17; --ok:#6CC38E; --ok-soft:#173225; --bad:#E17F76; --bad-soft:#3B1E1B;
+  --mem:#A99BE6; --mem-soft:#2A2547; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;
+  padding-block:28px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+h1{font-family:var(--display);font-size:clamp(28px,5vw,42px);line-height:1.05;margin:0;letter-spacing:-.02em;text-wrap:balance}
+.sub{color:var(--muted);max-width:62ch;margin:8px 0 0}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{font:500 14px var(--body);color:var(--muted);background:none;border:0;padding:9px 16px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.btns{display:flex;gap:8px}
+.btn{font:600 14px var(--body);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:9px 16px;border-radius:8px;cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:22px;align-items:start}
+@media(max-width:820px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.panel h2{font-family:var(--display);font-size:18px;margin:0 0 12px;letter-spacing:-.01em}
+.col{display:flex;flex-direction:column;gap:22px;min-width:0}
+ol.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.step{display:grid;grid-template-columns:78px minmax(0,1fr);gap:12px;padding:9px 0;border-top:1px solid var(--line)}
+.step:first-child{border-top:0}
+.step.now{background:linear-gradient(90deg,var(--accent-soft),transparent);margin:0 -10px;padding-left:10px;padding-right:10px;border-radius:6px}
+.chip{font:500 11px var(--mono);letter-spacing:.04em;text-transform:uppercase;padding:3px 7px;border-radius:5px;height:fit-content;text-align:center;background:var(--accent-soft);color:var(--accent)}
+.chip.evaluator{background:var(--warn-soft);color:var(--warn)}
+.chip.hmem{background:var(--mem-soft);color:var(--mem)}
+.chip.planner{background:var(--line);color:var(--muted)}
+.chip.data{background:var(--ok-soft);color:var(--ok)}
+.txt{min-width:0;overflow-wrap:anywhere}
+.txt small{display:block;color:var(--muted);font-size:13px}
+code,.mono{font-family:var(--mono);font-size:13px}
+.meter{height:10px;border-radius:6px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+.conf{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.conf b{font-family:var(--display);font-size:34px;line-height:1}
+.checks{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+.checks li{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:14px}
+.tag{font:500 12px var(--mono);padding:2px 8px;border-radius:5px;background:var(--line);color:var(--muted)}
+.tag.pass{background:var(--ok-soft);color:var(--ok)} .tag.fail{background:var(--bad-soft);color:var(--bad)}
+.tag.suspect{background:var(--warn-soft);color:var(--warn)} .tag.culprit{background:var(--bad-soft);color:var(--bad)} .tag.cleared{background:var(--ok-soft);color:var(--ok)}
+.commits{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.commits li{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:10px;align-items:start;font-size:14px}
+.commits li.dim{opacity:.5}
+.commits .m{overflow-wrap:anywhere}
+.commits small{display:block;color:var(--muted);font-size:12px}
+.verdict{border-color:var(--accent)}
+.verdict p{margin:0 0 12px}
+.verdict ul{margin:0;padding-left:18px;display:grid;gap:5px;font-size:14px}
+.verdict li{overflow-wrap:anywhere}
+.cmp{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}
+@media(max-width:600px){.cmp{grid-template-columns:minmax(0,1fr)}}
+.rows{display:flex;gap:6px;margin:8px 0 6px}
+.rows i{flex:1;height:26px;border-radius:5px;background:var(--accent-soft);border:1px solid var(--accent)}
+.big{font-family:var(--display);font-size:30px;line-height:1}
+.mem-line{font-size:14px;line-height:1.7}.mem-line .tag{margin-right:8px}
+.empty{color:var(--muted);font-size:14px}
+.foot{color:var(--muted);font-size:13px}
+@media(prefers-reduced-motion:reduce){.meter i{transition:none}}
+</style>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Track 2 · The Agent That Can Explain Why</div>
+    <h1>Build-Failure Detective</h1>
+    <p class="sub">A production deploy broke. Three commits shipped since the last good deploy, and one of them is a decoy that logs scary warnings. Watch the agent find the real cause, show its evidence, and get faster the second time. Both runs below are real: Zetaris SQL for data, NVIDIA Nemotron through Meterless Nightshift for memory mining.</p>
+  </header>
+  <div class="bar">
+    <div class="seg" role="group" aria-label="Choose run"><button id="r0" aria-pressed="true">Run 1 · cold start</button><button id="r1" aria-pressed="false">Run 2 · with memory</button></div>
+    <div class="btns"><button class="btn primary" id="play">Replay</button><button class="btn" id="skip">Jump to end</button></div>
+  </div>
+  <div class="grid">
+    <section class="panel" aria-label="Investigation log"><h2>Investigation log</h2><ol class="log" id="log"></ol></section>
+    <div class="col">
+      <section class="panel"><h2>Evaluator</h2>
+        <div class="conf"><b id="pct">0%</b><span class="mono" id="rnd">no verdict yet</span></div>
+        <div class="meter"><i id="meter"></i></div>
+        <ul class="checks" id="checks"></ul></section>
+      <section class="panel"><h2>Suspects</h2><ul class="commits" id="commits"></ul></section>
+    </div>
+  </div>
+  <section class="panel verdict" id="verdict" hidden><h2>Verdict</h2><p id="cause"></p><ul id="evidence"></ul></section>
+  <div class="cmp">
+    <section class="panel"><h2>Rounds to an answer</h2><div id="rounds"></div></section>
+    <section class="panel"><h2>What memory did</h2><div id="mem"></div></section>
+  </div>
+  <p class="foot">The agent proposes, the evaluator verifies. Memory can shorten the plan, but every check still has to pass from evidence. Source: github.com/hisham-droid/open-agent-hackathon-2026</p>
+</div>
+<script>
+const D = __DATA__;
+const CHECKS = [["log_signature","Error signature in logs"],["commit_introduces","A commit introduces it"],["prod_env_missing","Production lacks it"],["ci_explains_green","CI explains the green build"]];
+const AG = {planner:"planner",data:"data",hmem:"memory",deploy:"deploy",logs:"logs",commits:"commits",ci:"CI",evaluator:"evaluator"};
+let run=0, upto=0, timer=null;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function describe(s){
+  switch(s.agent+"."+s.action){
+    case "planner.start": return ["Question received","Data source: "+s.data_source+". Memory: H-MEM."];
+    case "data.load": {const n=Object.values(s.row_counts||{}).reduce((a,b)=>a+b,0);return ["Loaded "+n+" rows with SQL from "+s.source,Object.entries(s.row_counts).map(([k,v])=>k+" "+v).join(", ")]}
+    case "hmem.hydrate": return [s.long_term?"Warm start: "+s.long_term+" long-term memory restored":"Cold start: memory is empty",""];
+    case "deploy.deploy.locate": return ["Deploy "+s.failed+" failed. Last good: "+s.last_good,s.window.length+" commits shipped in between"];
+    case "logs.log.analyze": return ["First error in the failed deploy","<code>"+esc(s.primary)+"</code>"];
+    case "hmem.retrieve": return s.hits.length?["Recalled a lesson from an earlier incident","<code>"+esc(s.hits[0].id)+"</code> scored "+s.hits[0].score]:["Searched memory: nothing relevant yet",""];
+    case "hmem.mine": return [(s.model?s.model.split("/").pop():"Plain summaries")+" turned "+s.source_agent+" output into "+s.memories.length+" memories",s.mode==="model"?"through Meterless Nightshift to NVIDIA Nemotron":"fallback: no model used"];
+    case "evaluator.review": return ["Round "+s.round+": "+s.verdict+" at "+Math.round(s.confidence*100)+"% confidence",s.critique||""];
+    case "planner.replan": return ["Replan: "+s.next_actions.join(", "),s.reason];
+    case "planner.plan_from_memory": return ["Memory suggests running all "+s.steps.length+" likely checks together","The evaluator still verifies every one from evidence"];
+    case "commits.commits.analyze": {const t=s.ranked[0];return ["Top suspect: commit "+t.sha,"introduces "+t.introduced.join(", ")+"; "+(s.ranked.length-1)+" others scored 0"]}
+    case "deploy.env.check": return ["Production is missing "+s.missing.join(", "),"present in production: "+(s.present.length?s.present.join(", "):"none")];
+    case "ci.ci.analyze": return ["CI was green: "+s.green+". CI defines the variable: "+s.ci_defines_token,"which is why tests did not catch it"];
+    case "hmem.feedback": return ["Outcome fed back to memory: "+s.verdict,"lesson confidence is now "+s.confidence_after];
+    case "hmem.remember_lesson": return ["Lesson saved to "+s.layer.replace("_","-")+" memory","<code>"+esc(s.memory_id)+"</code>"];
+    case "planner.finish": return [s.status.charAt(0).toUpperCase()+s.status.slice(1)+" in "+s.rounds+" round"+(s.rounds>1?"s":""),"culprit: commit "+s.culprit];
+  } return [s.agent+" "+s.action,""];
+}
+function render(){
+  const R=D.runs[run], st=R.steps.slice(0,upto);
+  $("log").innerHTML=st.map((s,i)=>{const [a,b]=describe(s);return '<li class="step'+(i===st.length-1&&upto<R.steps.length?' now':'')+'"><span class="chip '+s.agent+'">'+AG[s.agent]+'</span><div class="txt">'+esc(a)+(b?'<small>'+b+'</small>':'')+'</div></li>'}).join("");
+  let rev=null; st.forEach(s=>{if(s.agent==="evaluator"&&s.action==="review")rev=s});
+  const conf=rev?rev.confidence:0;
+  $("pct").textContent=Math.round(conf*100)+"%"; $("meter").style.width=conf*100+"%";
+  $("rnd").textContent=rev?("round "+rev.round+": "+rev.verdict):"no verdict yet";
+  $("checks").innerHTML=CHECKS.map(([k,l])=>{const v=rev?rev.checks[k]:"unchecked";return '<li><span>'+l+'</span><span class="tag '+(v==="pass"?"pass":v==="fail"?"fail":"")+'">'+v+'</span></li>'}).join("");
+  const loc=st.find(s=>s.action==="deploy.locate"), win=loc?loc.window:[];
+  const ca=st.find(s=>s.action==="commits.analyze"), fin=st.find(s=>s.action==="finish");
+  $("commits").innerHTML=D.commits.slice().reverse().map(c=>{
+    const inWin=win.includes(c.sha); let tag="",cls="",note=c.author+" · "+c.files[0];
+    if(!loc) tag="";
+    else if(!inWin){tag="before the last good deploy";cls="dim"}
+    else if(fin&&fin.culprit===c.sha){tag='<span class="tag culprit">culprit</span>'}
+    else if(fin){tag='<span class="tag cleared">ruled out</span>'}
+    else if(ca&&ca.ranked[0].sha===c.sha){tag='<span class="tag suspect">suspect</span>'}
+    else if(ca){tag='<span class="tag">score 0</span>'}
+    else tag='<span class="tag">in window</span>';
+    if(!inWin&&loc) tag='<span class="tag">older</span>';
+    return '<li class="'+cls+'"><code>'+c.sha+'</code><div class="m">'+esc(c.message)+'<small>'+esc(note)+'</small></div><div>'+tag+'</div></li>'}).join("");
+  const done=upto>=R.steps.length;
+  $("verdict").hidden=!done;
+  if(done){$("cause").textContent=R.cause;$("evidence").innerHTML=R.evidence.concat(R.ruled_out.map(x=>"Ruled out "+x)).map(x=>"<li>"+esc(x.replace(/`/g,""))+"</li>").join("")}
+  $("r0").setAttribute("aria-pressed",run===0); $("r1").setAttribute("aria-pressed",run===1);
+}
+function stats(){
+  const rounds=D.runs.map(r=>r.steps.find(s=>s.action==="finish").rounds);
+  $("rounds").innerHTML=D.runs.map((r,i)=>'<div><span class="mono">'+r.title+'</span><div class="rows">'+Array.from({length:rounds[i]},()=>"<i></i>").join("")+'</div><span class="big">'+rounds[i]+'</span> <span class="empty">round'+(rounds[i]>1?"s":"")+' to a confirmed answer</span></div>').join('<div style="height:14px"></div>');
+  const l2=D.runs[1].steps, ret=l2.find(s=>s.action==="retrieve"), fb=l2.find(s=>s.action==="feedback"), rem=l2.find(s=>s.action==="remember_lesson");
+  const l1=D.runs[0].steps.find(s=>s.action==="remember_lesson");
+  $("mem").innerHTML='<div class="mem-line"><span class="tag" style="background:var(--mem-soft);color:var(--mem)">run 1</span>saved <code>'+l1.memory_id+'</code> at confidence '+l1.confidence+'</div>'+
+   '<div class="mem-line" style="margin-top:8px"><span class="tag" style="background:var(--mem-soft);color:var(--mem)">run 2</span>recalled it (score '+ret.hits[0].score+'), ran the likely checks together, then marked it <b>'+fb.verdict+'</b>: confidence '+l1.confidence+' to '+fb.confidence_after+'</div>'+
+   '<p class="empty" style="margin:10px 0 0">If the evidence had disagreed, the answer would have stayed unconfirmed and the lesson would have been marked wrong.</p>';
+}
+function play(){clearInterval(timer);upto=0;render();timer=setInterval(()=>{upto++;render();if(upto>=D.runs[run].steps.length)clearInterval(timer)},650)}
+function pick(i){clearInterval(timer);run=i;upto=D.runs[run].steps.length;render()}
+$("play").onclick=play; $("skip").onclick=()=>{clearInterval(timer);upto=D.runs[run].steps.length;render()};
+$("r0").onclick=()=>pick(0); $("r1").onclick=()=>pick(1);
+stats(); pick(0);
+</script>

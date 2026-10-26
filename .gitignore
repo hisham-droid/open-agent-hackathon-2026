@@ -35,3 +35,8 @@ outputs_live/
 .cmd_log.txt
 outputs_live2/
 .step.sh
+outputs_ns1/
+outputs_ns2/
+.agent_memory_ns/
+.agent_memory_ui
+run_step.command

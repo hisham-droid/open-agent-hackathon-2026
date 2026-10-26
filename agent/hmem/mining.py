@@ -9,19 +9,19 @@ KIND_TYPE = {"tool_result": "factual", "verdict": "procedural", "outcome": "proc
 
 
 def parse_json_array(text):
-    """Tolerate code fences and surrounding chatter. Returns a list of non-empty strings or None."""
+    """Tolerate code fences, surrounding chatter and reasoning text. Takes the last valid array of strings."""
     if not isinstance(text, str):
         return None
     text = re.sub(r"```[a-zA-Z]*", "", text)
-    start, end = text.find("["), text.rfind("]")
-    if start == -1 or end <= start:
-        return None
-    try:
-        arr = json.loads(text[start:end + 1])
-    except json.JSONDecodeError:
-        return None
-    items = [s.strip() for s in arr if isinstance(s, str) and s.strip()]
-    return items[:5] or None
+    for m in reversed(list(re.finditer(r"\[[^\[\]]*\]", text))):
+        try:
+            arr = json.loads(m.group(0))
+        except json.JSONDecodeError:
+            continue
+        items = [s.strip() for s in arr if isinstance(s, str) and s.strip()]
+        if items:
+            return items[:5]
+    return None
 
 
 def extraction_prompt(event):

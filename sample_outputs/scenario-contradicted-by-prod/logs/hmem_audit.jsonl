@@ -1,0 +1,5 @@
+{"ts": "2026-10-26T11:06:04+0000", "memoryId": "-", "action": "hydrate", "actor": "run:run-1", "details": {"long_term": 0, "working": 0, "decayed": 0}}
+{"ts": "2026-10-26T11:06:04+0000", "memoryId": "mem-7c07b51985", "action": "create", "actor": "logs", "details": {"layer": "short_term", "type": "factual", "agentId": "logs", "runId": "run-1", "taskId": "log.analyze", "tags": ["tool_result", "logs"]}}
+{"ts": "2026-10-26T11:06:04+0000", "memoryId": "mem-2313eaf4cc", "action": "create", "actor": "commits", "details": {"layer": "short_term", "type": "factual", "agentId": "commits", "runId": "run-1", "taskId": "commits.analyze", "tags": ["tool_result", "commits"]}}
+{"ts": "2026-10-26T11:06:04+0000", "memoryId": "mem-abd12a3764", "action": "create", "actor": "deploy", "details": {"layer": "short_term", "type": "factual", "agentId": "deploy", "runId": "run-1", "taskId": "env.check", "tags": ["tool_result", "deploy"]}}
+{"ts": "2026-10-26T11:06:04+0000", "memoryId": "mem-3feb4cdd27", "action": "create", "actor": "ci", "details": {"layer": "short_term", "type": "factual", "agentId": "ci", "runId": "run-1", "taskId": "ci.analyze", "tags": ["tool_result", "ci"]}}
