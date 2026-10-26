@@ -41,3 +41,5 @@ outputs_ns2/
 .agent_memory_ui
 run_step.command
 .live3.txt
+outputs_live3/
+.agent_memory_live3/
