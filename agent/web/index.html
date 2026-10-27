@@ -67,8 +67,25 @@ ol.tl li.ev:before{background:var(--acc)}ol.tl li.rej:before{background:var(--wa
 .mviews{position:absolute;right:16px;top:16px;z-index:4;display:flex;gap:6px}.mviews button{background:var(--card);border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:6px 12px;font:500 13px system-ui;cursor:pointer}.mviews button:hover{border-color:var(--acc)}
 #mtip{position:absolute;left:34px;bottom:22px;z-index:4;max-width:360px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:11px 14px;box-shadow:var(--shadow);font-size:14px}#mtip b{display:block;margin-bottom:2px}#mtip span{color:var(--mute)}
 .hint{position:absolute;right:18px;bottom:16px;z-index:4;font-size:12.5px;color:var(--mute)}#machine.nogl .mlabel,#machine.nogl .mviews{display:none}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 22px}@media(max-width:700px){.how{grid-template-columns:1fr}}
+.how div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;color:var(--mute)}.how b{display:block;color:var(--ink);font-size:15px;margin-bottom:2px}.how i{font-style:normal;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accbg);color:var(--acc);font-weight:700;font-size:12px;margin-right:8px}
+.spot{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(420px 420px at var(--mx,70%) var(--my,10%),color-mix(in srgb,var(--acc) 14%,transparent),transparent 70%);transition:background .1s}
+.wrap{position:relative;z-index:1}
+.card,.sc,.how div{transform-style:preserve-3d;will-change:transform}
+.card{position:relative}.card:before,.sc:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(260px 160px at var(--gx,50%) var(--gy,0%),color-mix(in srgb,var(--acc) 16%,transparent),transparent 70%)}
+.card:hover:before,.sc:hover:before{opacity:1}.sc{position:relative}
+.btn:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);transform:translateX(-120%);animation:sheen 3.2s ease-in-out infinite}
+@keyframes sheen{55%,100%{transform:translateX(120%)}}
+.rip{position:absolute;border-radius:50%;background:rgba(255,255,255,.55);pointer-events:none;transform:scale(0)}
+.burst{position:fixed;width:9px;height:9px;border-radius:3px;pointer-events:none;z-index:50}
+.chip{transition:transform .15s,box-shadow .15s}.chip:hover{transform:translateY(-2px) scale(1.08);box-shadow:0 4px 10px color-mix(in srgb,var(--acc) 30%,transparent)}
+.pill{transition:transform .15s}.pill:hover{transform:scale(1.06)}
+.node{cursor:default}.node:hover{transform:translateY(-3px) scale(1.04)}
+.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);font-weight:600}
+.trust{font-size:14px;color:var(--mute);margin-top:10px}
+.legend{font-size:13px;color:var(--mute);margin:0 0 10px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-</style></head><body><div class="wrap">
+</style></head><body><div class="spot" id="spot"></div><div class="wrap">
 <section class="hero" aria-label="3D model of the agent"><div id="machine">
  <div class="htext"><h1><span>Build-Failure</span> Detective</h1>
  <p class="sub">An agent that finds why a deploy failed, shows its evidence, and says so when it can't be sure.</p>
@@ -76,6 +93,7 @@ ol.tl li.ev:before{background:var(--acc)}ol.tl li.rej:before{background:var(--wa
  <div class="mviews"><button data-view="overview">Overview</button><button data-view="front">Front</button><button data-view="top">Top</button><button data-view="memory">Memory</button></div>
  <div id="mtip" hidden><b></b><span></span></div><div class="hint">Drag to orbit. Click a station.</div>
 </div></section>
+<div class="how"><div><b><i>1</i>Pick an incident</b>Each one is a broken deploy with its own evidence.</div><div><b><i>2</i>Watch it investigate</b>Specialists read deploys, logs, commits and CI. A checker rejects anything unproven.</div><div><b><i>3</i>Read the verdict</b>A cause, the proof behind it, and what was ruled out. Or "inconclusive".</div></div>
 <div class="grid">
  <div class="side"><div class="card"><h2>Pick an incident</h2><div id="list"></div>
    <label class="t"><input type="checkbox" id="usemodel" checked> Let Nemotron write the explanation</label>
@@ -90,7 +108,7 @@ ol.tl li.ev:before{background:var(--acc)}ol.tl li.rej:before{background:var(--wa
 const $=(s,r=document)=>r.querySelector(s);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
-let M=null;try{M=await Promise.race([import("https://cdn.jsdelivr.net/npm/motion@11.11.13/+esm"),new Promise((_,j)=>setTimeout(j,2500))])}catch(e){}
+let M=null;try{M=await Promise.race([import("/vendor/motion.min.js"),new Promise((_,j)=>setTimeout(j,2500))])}catch(e){}
 const tf=(k,v)=>k==="y"?`translateY(${v}px)`:k==="x"?`translateX(${v}px)`:k==="scale"?`scale(${v})`:"";
 function fx(e,kf,o={}){if(reduce||!e)return;const d=o.duration??.45,dl=o.delay??0;
  if(M&&M.animate){try{return M.animate(e,kf,{duration:d,delay:dl,ease:o.ease||[.2,.8,.2,1]})}catch(_){}}
@@ -100,9 +118,11 @@ const rise=(e,i=0)=>fx(e,{opacity:[0,1],y:[14,0]},{delay:i*.06});
 const tween=(a,b,ms,fn)=>{if(reduce){fn(b);return}const t0=performance.now();(function s(t){const p=Math.min(1,(t-t0)/ms),e=1-Math.pow(1-p,3);fn(a+(b-a)*e);if(p<1)requestAnimationFrame(s)})(t0)};
 const svg=(d,w=16)=>{const s=document.createElementNS("http://www.w3.org/2000/svg","svg");s.setAttribute("viewBox","0 0 24 24");s.setAttribute("fill","none");s.setAttribute("stroke","currentColor");s.setAttribute("stroke-width","2");s.setAttribute("stroke-linecap","round");s.setAttribute("stroke-linejoin","round");s.setAttribute("aria-hidden","true");s.setAttribute("width",w);s.setAttribute("height",w);s.innerHTML=d;return s};
 const ICON={planner:'<circle cx="12" cy="12" r="9"/><path d="m12 7 3 5-3 5-3-5z"/>',deploy:'<path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/>',logs:'<path d="M4 6h16M4 12h16M4 18h10"/>',commits:'<circle cx="12" cy="12" r="3"/><path d="M3 12h6m6 0h6"/>',ci:'<path d="m5 12 4 4 10-10"/>',evaluator:'<path d="M12 3 4 7v6c0 4 3.5 7 8 8 4.500-1 8-4 8-8V7z"/>',explainer:'<path d="M4 5h16v11H9l-5 4z"/>',hmem:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.700 3.600 3 8 3s8-1.300 8-3V6M4 12v6c0 1.700 3.600 3 8 3s8-1.300 8-3v-6"/>',data:'<path d="M4 7h16M4 12h16M4 17h16"/>'};
+const TIPS={planner:"Decides what to check next",deploy:"Finds the failed deploy and what production is missing",logs:"Finds the first error line",commits:"Ranks which commit could have caused it",ci:"Checks whether CI had what the commit needs",evaluator:"Checks the proof and rejects guesses",explainer:"Writes the plain-English explanation",hmem:"Remembers lessons from earlier incidents"};
+const CHK={log_signature:"Error found in logs",commit_introduces:"Commit introduces it",prod_env_missing:"Production lacks it",ci_explains_green:"CI explains the green build"};
 const NODES=[["planner","Planner"],["deploy","Deploys"],["logs","Logs"],["commits","Commits"],["ci","CI"],["evaluator","Evaluator"],["explainer","Explainer"],["hmem","Memory"]];
 const pipe=$("#pipe");const nodeEl={};
-NODES.forEach(([k,l],i)=>{if(i&&k!=="hmem"){const a=el("span","arrow","→");pipe.append(a)}const n=el("div","node"+(k==="hmem"?" mem":""));n.append(svg(ICON[k]),document.createTextNode(l));n.dataset.k=k;nodeEl[k]=n;pipe.append(n)});
+NODES.forEach(([k,l],i)=>{if(i&&k!=="hmem"){const a=el("span","arrow","→");pipe.append(a)}const n=el("div","node"+(k==="hmem"?" mem":""));n.append(svg(ICON[k]),document.createTextNode(l));n.dataset.k=k;n.title=TIPS[k]||"";nodeEl[k]=n;pipe.append(n)});
 const sleep=ms=>new Promise(r=>setTimeout(r,reduce?0:ms));
 const chips=ids=>ids.map(i=>{const c=el("span","chip",i);c.title="Evidence id";return c});
 function say(s){const a=s.agent,x=s.action;
@@ -139,7 +159,7 @@ $("#go").onclick=async()=>{const out=$("#out"),btn=$("#go");btn.disabled=true;bt
   if(d.error)throw new Error(d.error);pipe.classList.remove("working");await play(d)}catch(e){pipe.classList.remove("working");out.replaceChildren(el("div","err","Something went wrong: "+e.message));$("#now").textContent=""}
  btn.disabled=false;btn.textContent="Investigate"};
 async function play(d){const r=d.result,out=$("#out");
- const t=el("div","card");t.append(el("h2",0,"What the agent did, step by step"));const ol=el("ol","tl");t.append(ol);out.append(t);rise(t);
+ const t=el("div","card");t.append(el("h2",0,"What the agent did, step by step"),el("p","legend","The green tags (like log:d-102:7) are evidence ids. Each points to one row the agent actually read."));const ol=el("ol","tl");t.append(ol);out.append(t);rise(t);
  for(const s of d.trace){const [txt,cls,ev]=say(s);const nk=s.agent==="data"?"deploy":s.agent;const n=nodeEl[nk];
   if(window.__machine)window.__machine.step(s.agent==="data"?"data":s.agent,cls||"");if(n){Object.values(nodeEl).forEach(x=>x.classList.remove("on","rej"));n.classList.add("on","done");if(cls==="rej")n.classList.add("rej")}
   $("#now").textContent=txt;const li=el("li",cls||"");li.append(el("span","tag",s.agent),document.createTextNode(txt));if(ev&&ev.length)li.append(...chips(ev));ol.append(li);fx(li,{opacity:[0,1],x:[-10,0]},{duration:.3});ol.scrollTop=ol.scrollHeight;await sleep(s.agent==="evaluator"?420:230)}
@@ -153,8 +173,8 @@ function reveal(d){const r=d.result,out=$("#out"),ok=r.status==="confirmed",pct=
  const num=el("div","n","0%");ring.append(sv,num);
  const vt=el("div","vt"),row=el("div");row.append(el("span","pill "+(ok?"ok":"no"),ok?"Confirmed":"Inconclusive"));
  row.append(document.createTextNode(" "),el("span","mute",r.rounds+(r.rounds===1?" round":" rounds")));if(r.memory&&r.memory.fast_path)row.append(document.createTextNode(" "),el("span","pill mm","memory-guided"));
- vt.append(row,el("div","big",r.cause));
- const ck=el("div","checks");Object.entries(r.checks||{}).forEach(([k,s])=>ck.append(el("span","pill "+(s==="pass"?"ok":"no"),(s==="pass"?"✓ ":"✗ ")+k.replace(/_/g," "))));vt.append(ck);
+ vt.append(el("div","eyebrow",ok?"Most likely cause":"No safe verdict"),row,el("div","big",r.cause));
+ const ck=el("div","checks");Object.entries(r.checks||{}).forEach(([k,s])=>ck.append(el("span","pill "+(s==="pass"?"ok":"no"),(s==="pass"?"✓ ":"✗ ")+(CHK[k]||k.replace(/_/g," ")))));vt.append(ck);{const vals=Object.values(r.checks||{}),np=vals.filter(x=>x==="pass").length;vt.append(el("div","trust",ok?np+" of "+vals.length+" independent checks passed, so the agent is "+pct+"% sure. Each one is backed by evidence ids you can trace.":"Only "+np+" of "+vals.length+" checks passed, so the agent refuses to name a culprit rather than guess."))}
  v.append(ring,vt);out.prepend(v);rise(v);
  tween(0,pct,1100,x=>{num.textContent=Math.round(x)+"%";$("#arc",v).setAttribute("stroke-dashoffset",C*(1-x/100*(1)))});
  const prev=history.slice(0,-1).filter(h=>h.rounds>r.rounds);
@@ -172,5 +192,30 @@ function reveal(d){const r=d.result,out=$("#out"),ok=r.status==="confirmed",pct=
   ab.onclick=go;inp.onkeydown=e=>{if(e.key==="Enter")go()};v.after(c);rise(c,3)}
  if(r.ruled_out&&r.ruled_out.length){const q=el("div","card");q.append(el("h2",0,"Ruled out"));r.ruled_out.forEach(x=>{const p=el("div","pt");p.append(el("span","chip",x.sha),document.createTextNode(" "+x.reason));q.append(p)});out.append(q);rise(q,4)}
  v.scrollIntoView({behavior:reduce?"auto":"smooth",block:"nearest"})}
+/* interactive layer */
+const A=(e,kf,o)=>fx(e,kf,o);
+const fine=matchMedia("(pointer:fine)").matches;
+if(fine&&!reduce){
+ const spot=$("#spot");addEventListener("pointermove",e=>{spot.style.setProperty("--mx",e.clientX+"px");spot.style.setProperty("--my",e.clientY+"px")},{passive:true});
+ const tilt=(root)=>{root.querySelectorAll?.(".card,.sc,.how div").forEach(c=>{if(c.__t)return;c.__t=1;
+  c.addEventListener("pointermove",e=>{const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
+   c.style.setProperty("--gx",x*100+"%");c.style.setProperty("--gy",y*100+"%");
+   if(c.classList.contains("card")&&r.height>260)return;c.style.transform=`perspective(700px) rotateX(${(.5-y)*5}deg) rotateY(${(x-.5)*7}deg) translateY(-2px)`});
+  c.addEventListener("pointerleave",()=>{c.style.transition="transform .45s cubic-bezier(.2,.8,.2,1)";c.style.transform="";setTimeout(()=>c.style.transition="",460)})})};
+ tilt(document);new MutationObserver(m=>m.forEach(x=>x.addedNodes.forEach(n=>n.nodeType===1&&(n.matches?.(".card,.sc,.how div")?tilt({querySelectorAll:()=>[n]}):tilt(n))))).observe(document.body,{childList:true,subtree:true});
+ const go=$("#go");go.addEventListener("pointermove",e=>{const r=go.getBoundingClientRect();go.style.transform=`translate(${(e.clientX-r.left-r.width/2)*.06}px,${(e.clientY-r.top-r.height/2)*.18}px)`});go.addEventListener("pointerleave",()=>go.style.transform="")}
+document.addEventListener("pointerdown",e=>{const b=e.target.closest?.(".btn");if(!b||reduce)return;const r=b.getBoundingClientRect(),d=Math.max(r.width,r.height)*2,s=el("span","rip");
+ s.style.cssText=`width:${d}px;height:${d}px;left:${e.clientX-r.left-d/2}px;top:${e.clientY-r.top-d/2}px`;b.append(s);
+ const a=A(s,{scale:[0,1],opacity:[.6,0]},{duration:.7});setTimeout(()=>s.remove(),750)});
+document.querySelectorAll(".how div").forEach((d,i)=>A(d,{opacity:[0,1],y:[24,0],scale:[.96,1]},{delay:.15+i*.1,duration:.6}));
+const kinds=["var(--acc)","var(--mem)","var(--warn)"];
+window.__burst=(x,y)=>{if(reduce)return;for(let i=0;i<26;i++){const p=el("i","burst");p.style.background=kinds[i%3];p.style.left=x+"px";p.style.top=y+"px";document.body.append(p);
+ const a=Math.random()*Math.PI*2,v=90+Math.random()*190,dx=Math.cos(a)*v,dy=Math.sin(a)*v-60;
+ p.animate([{transform:"translate(0,0) rotate(0)",opacity:1},{transform:`translate(${dx}px,${dy+160}px) rotate(${Math.random()*540}deg)`,opacity:0}],{duration:900+Math.random()*500,easing:"cubic-bezier(.2,.7,.3,1)"}).onfinish=()=>p.remove()}};
+const _rev=reveal;
+reveal=function(d){_rev(d);const v=document.querySelector(".verdict");if(!v)return;
+ if(d.result.status==="confirmed"){const r=v.getBoundingClientRect();setTimeout(()=>window.__burst(r.left+80,r.top+60),500)}
+ v.querySelectorAll(".checks .pill").forEach((p,i)=>A(p,{opacity:[0,1],scale:[.5,1],y:[10,0]},{delay:.9+i*.14,duration:.5}));
+ const big=v.querySelector(".big");if(big)A(big,{opacity:[0,1],x:[-16,0]},{delay:.3,duration:.6})};
 load();
 </script><script type="module" src="/factory.js"></script></body></html>

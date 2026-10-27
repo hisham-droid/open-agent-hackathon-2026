@@ -100,6 +100,8 @@ After the evaluator decides, Nemotron (through Nightshift) writes a plain-Englis
 
 ## The web app
 
+The UI uses Motion (MIT, vendored in `agent/web/vendor/`, so it works offline) for the card tilt, cursor spotlight, staggered check pills and the confirmation burst. A three-step strip and hover tips explain each station for first-time viewers.
+
 `python3 -m agent.server` then open http://localhost:8000. Pick an incident, press Investigate, and watch the agent's steps, verdict, evidence ids and the cited explanation. Run "Renamed setting breaks production" and then "Same failure, different names" to see memory cut the work from four rounds to one. With `SAMPLE_MODE=false` a "Live data from Zetaris" option appears.
 
 ## Stress test

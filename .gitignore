@@ -43,3 +43,4 @@ run_step.command
 .live3.txt
 outputs_live3/
 .agent_memory_live3/
+.server.log
