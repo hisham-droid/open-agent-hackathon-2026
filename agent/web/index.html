@@ -71,7 +71,7 @@ ol.tl li.ev:before{background:var(--acc)}ol.tl li.rej:before{background:var(--wa
 .how div{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;color:var(--mute)}.how b{display:block;color:var(--ink);font-size:15px;margin-bottom:2px}.how i{font-style:normal;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--accbg);color:var(--acc);font-weight:700;font-size:12px;margin-right:8px}
 .spot{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(420px 420px at var(--mx,70%) var(--my,10%),color-mix(in srgb,var(--acc) 14%,transparent),transparent 70%);transition:background .1s}
 .wrap{position:relative;z-index:1}
-.card,.sc,.how div{transform-style:preserve-3d;will-change:transform}
+.how div{transform-style:preserve-3d;will-change:transform}
 .card{position:relative}.card:before,.sc:before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .25s;background:radial-gradient(260px 160px at var(--gx,50%) var(--gy,0%),color-mix(in srgb,var(--acc) 16%,transparent),transparent 70%)}
 .card:hover:before,.sc:hover:before{opacity:1}.sc{position:relative}
 .btn:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.35) 50%,transparent 70%);transform:translateX(-120%);animation:sheen 3.2s ease-in-out infinite}
@@ -200,7 +200,7 @@ if(fine&&!reduce){
  const tilt=(root)=>{root.querySelectorAll?.(".card,.sc,.how div").forEach(c=>{if(c.__t)return;c.__t=1;
   c.addEventListener("pointermove",e=>{const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
    c.style.setProperty("--gx",x*100+"%");c.style.setProperty("--gy",y*100+"%");
-   if(c.classList.contains("card")&&r.height>260)return;c.style.transform=`perspective(700px) rotateX(${(.5-y)*5}deg) rotateY(${(x-.5)*7}deg) translateY(-2px)`});
+   if(!c.matches(".how div"))return;c.style.transform=`perspective(700px) rotateX(${(.5-y)*5}deg) rotateY(${(x-.5)*7}deg) translateY(-2px)`});
   c.addEventListener("pointerleave",()=>{c.style.transition="transform .45s cubic-bezier(.2,.8,.2,1)";c.style.transform="";setTimeout(()=>c.style.transition="",460)})})};
  tilt(document);new MutationObserver(m=>m.forEach(x=>x.addedNodes.forEach(n=>n.nodeType===1&&(n.matches?.(".card,.sc,.how div")?tilt({querySelectorAll:()=>[n]}):tilt(n))))).observe(document.body,{childList:true,subtree:true});
  const go=$("#go");go.addEventListener("pointermove",e=>{const r=go.getBoundingClientRect();go.style.transform=`translate(${(e.clientX-r.left-r.width/2)*.06}px,${(e.clientY-r.top-r.height/2)*.18}px)`});go.addEventListener("pointerleave",()=>go.style.transform="")}
